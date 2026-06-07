@@ -624,7 +624,11 @@ class MythosOrganism(
     /**
      * Synthesizes a new narrative archetype based on user concept input, leveraging the Gemini LLM Cortex or a local cohesive backup compiler.
      */
-    suspend fun synthesizeArchetype(userInput: String): NarrativeArchetype = withContext(Dispatchers.IO) {
+    suspend fun synthesizeArchetype(
+        userInput: String,
+        mappedConcept: String = "None",
+        mappedCategory: String = "None"
+    ): NarrativeArchetype = withContext(Dispatchers.IO) {
         val conceptIdea = userInput.trim()
         val timestamp = System.currentTimeMillis()
         
@@ -669,7 +673,7 @@ class MythosOrganism(
             }
         }
         
-        val archetype = parseArchetypeText(responseText, conceptIdea, timestamp)
+        val archetype = parseArchetypeText(responseText, conceptIdea, timestamp, mappedConcept, mappedCategory)
         archetypeDao.insert(archetype)
         archetype
     }
@@ -698,7 +702,13 @@ class MythosOrganism(
         """.trimIndent()
     }
 
-    private fun parseArchetypeText(rawText: String, defaultConcept: String, timestamp: Long): NarrativeArchetype {
+    private fun parseArchetypeText(
+        rawText: String,
+        defaultConcept: String,
+        timestamp: Long,
+        mappedConcept: String = "None",
+        mappedCategory: String = "None"
+    ): NarrativeArchetype {
         var name = ""
         var desc = ""
         var fragment = ""
@@ -743,6 +753,8 @@ class MythosOrganism(
             description = desc,
             narrativeSnippet = fragment,
             alignmentCoherence = coherence,
+            mappedIdentityConcept = mappedConcept,
+            mappedCategory = mappedCategory,
             timestamp = timestamp
         )
     }

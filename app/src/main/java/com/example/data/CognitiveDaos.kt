@@ -77,6 +77,9 @@ interface ArchetypeDao {
     @Query("SELECT * FROM narrative_archetypes ORDER BY timestamp DESC")
     fun observeAll(): Flow<List<NarrativeArchetype>>
 
+    @Query("SELECT * FROM narrative_archetypes ORDER BY timestamp DESC")
+    suspend fun getAllSync(): List<NarrativeArchetype>
+
     @Query("DELETE FROM narrative_archetypes")
     suspend fun clear()
 }
@@ -125,5 +128,42 @@ interface CoherenceHistoryDao {
     @Query("DELETE FROM coherence_history")
     suspend fun clear()
 }
+
+@Dao
+interface NeuralMemoryDao {
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(entry: NeuralMemoryEntry)
+
+    @Query("SELECT * FROM neural_memory_cache ORDER BY timestamp DESC")
+    fun observeAll(): Flow<List<NeuralMemoryEntry>>
+
+    @Query("SELECT * FROM neural_memory_cache ORDER BY timestamp DESC")
+    suspend fun getAllSync(): List<NeuralMemoryEntry>
+
+    @Query("DELETE FROM neural_memory_cache WHERE id = :id")
+    suspend fun deleteById(id: Long)
+
+    @Query("DELETE FROM neural_memory_cache")
+    suspend fun clear()
+}
+
+@Dao
+interface NarrativeAnchorDao {
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(anchor: NarrativeAnchor)
+
+    @Query("SELECT * FROM narrative_anchors ORDER BY timestamp DESC")
+    fun observeAll(): Flow<List<NarrativeAnchor>>
+
+    @Query("SELECT * FROM narrative_anchors ORDER BY timestamp DESC")
+    suspend fun getAllSync(): List<NarrativeAnchor>
+
+    @Query("DELETE FROM narrative_anchors WHERE id = :id")
+    suspend fun deleteById(id: Long)
+
+    @Query("DELETE FROM narrative_anchors")
+    suspend fun clear()
+}
+
 
 

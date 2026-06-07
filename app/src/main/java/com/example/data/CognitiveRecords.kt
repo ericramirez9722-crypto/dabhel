@@ -61,6 +61,8 @@ data class NarrativeArchetype(
     val description: String,
     val narrativeSnippet: String,
     val alignmentCoherence: Double,
+    val mappedIdentityConcept: String = "None",
+    val mappedCategory: String = "None",
     val timestamp: Long = System.currentTimeMillis()
 )
 
@@ -92,5 +94,33 @@ data class CoherenceHistoryRecord(
     val mythosCoherence: Double,
     val updateTrigger: String
 )
+
+@Entity(tableName = "neural_memory_cache")
+data class NeuralMemoryEntry(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val infoText: String,
+    val vectorCsv: String,
+    val associatedInvariantConcept: String = "None",
+    val associatedInvariantCategory: String = "None",
+    val associationSimilarity: Double = 0.0,
+    val timestamp: Long = System.currentTimeMillis()
+) {
+    fun getVector(): FloatArray = vectorCsv.toFloatArray()
+}
+
+@Entity(tableName = "narrative_anchors")
+data class NarrativeAnchor(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val anchorTitle: String,
+    val anchorDescription: String,
+    val archetypeId: Long,
+    val archetypeName: String,
+    val invariantId: Long,
+    val invariantConcept: String,
+    val crossReferenceAnalysis: String,
+    val cohesionScore: Double,
+    val timestamp: Long = System.currentTimeMillis()
+)
+
 
 

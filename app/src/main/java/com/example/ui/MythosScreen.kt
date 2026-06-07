@@ -608,7 +608,7 @@ fun MythosScreen(viewModel: MythosViewModel) {
                                         .padding(3.dp),
                                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                                 ) {
-                                    val tabs = listOf("Mythos", "Academia", "Identidad", "Métricas", "Conceptos", "Rechazos")
+                                    val tabs = listOf("Mythos", "Academia", "Identidad", "Mythos Registry", "Anclajes", "Memoria Neural", "Métricas", "Conceptos", "Rechazos")
                                     tabs.forEachIndexed { index, label ->
                                         val isSelected = activeTab == index
                                         val animatedBgColor by animateColorAsState(
@@ -662,9 +662,12 @@ fun MythosScreen(viewModel: MythosViewModel) {
                                     )
                                     1 -> AcademiaView(viewModel = viewModel)
                                     2 -> IdentityCoreView(viewModel = viewModel)
-                                    3 -> MetricsDashboardView(viewModel = viewModel)
-                                    4 -> ConceptosView(traces = semanticTraces, episodics = recentEpisodics, viewModel = viewModel)
-                                    5 -> RejectionsView(viewModel = viewModel)
+                                    3 -> ArchetypesView(viewModel = viewModel)
+                                    4 -> NarrativeAnchorsView(viewModel = viewModel)
+                                    5 -> NeuralMemoryView(viewModel = viewModel)
+                                    6 -> MetricsDashboardView(viewModel = viewModel)
+                                    7 -> ConceptosView(traces = semanticTraces, episodics = recentEpisodics, viewModel = viewModel)
+                                    8 -> RejectionsView(viewModel = viewModel)
                                 }
                             }
                         }
@@ -1787,20 +1790,51 @@ fun ArchetypesView(viewModel: MythosViewModel) {
     val archetypes by viewModel.narrativeArchetypes.collectAsStateWithLifecycle()
     val isSynthesizing by viewModel.isSynthesizingArchetype.collectAsStateWithLifecycle()
     val lastSynthesized by viewModel.lastSynthesizedArchetype.collectAsStateWithLifecycle()
+    val identityInvariants by viewModel.identityInvariants.collectAsStateWithLifecycle()
     
-    // Voice Portal States
+    // Voice Portal States (Unified native & simulated Web Speech interface)
     val isListening by viewModel.isSpeechListening.collectAsStateWithLifecycle()
     val partialText by viewModel.speechPartialText.collectAsStateWithLifecycle()
+    val speechFinalText by viewModel.speechFinalText.collectAsStateWithLifecycle()
     val rmsLevel by viewModel.speechRmsDb.collectAsStateWithLifecycle()
     val speechError by viewModel.speechError.collectAsStateWithLifecycle()
     
+    // Web Speech Live Tagging States
+    val voiceFragmentTranscription by viewModel.voiceFragmentTranscription.collectAsStateWithLifecycle()
+    val voiceTaggedConcept by viewModel.voiceTaggedConcept.collectAsStateWithLifecycle()
+    val voiceTaggedCategory by viewModel.voiceTaggedCategory.collectAsStateWithLifecycle()
+    val voiceTagSimilarity by viewModel.voiceTagSimilarity.collectAsStateWithLifecycle()
+    val isVoiceTaggingActive by viewModel.isVoiceTaggingActive.collectAsStateWithLifecycle()
+    val voiceGeneratedArchetype by viewModel.voiceGeneratedArchetype.collectAsStateWithLifecycle()
+    
+    // Form Selection Mode
+    var registryFormMode by remember { mutableIntStateOf(0) } // 0: Cortex IA, 1: Portal de Voz (Web Speech), 2: manual
+    
+    // Form Input States
     var ideaInput by remember { mutableStateOf("") }
+    
+    var manualName by remember { mutableStateOf("") }
+    var manualDesc by remember { mutableStateOf("") }
+    var manualSnippet by remember { mutableStateOf("") }
+    var manualCoherence by remember { mutableDoubleStateOf(0.85) }
+    
+    // Mapped identity concept state matching
+    var selectedConcept by remember { mutableStateOf("None") }
+    var selectedCategory by remember { mutableStateOf("None") }
+    
     val context = LocalContext.current
     
     // Live update input field with voice transcription
     LaunchedEffect(partialText, isListening) {
         if (isListening && partialText.isNotBlank()) {
             ideaInput = partialText
+        }
+    }
+    
+    // Automatically process spoken fragments in the Web Speech Portal tab
+    LaunchedEffect(speechFinalText, isListening) {
+        if (!isListening && speechFinalText.isNotBlank() && registryFormMode == 1) {
+            viewModel.tagAndSynthesizeSpokenFragment(speechFinalText)
         }
     }
     
@@ -1819,73 +1853,413 @@ fun ArchetypesView(viewModel: MythosViewModel) {
             .padding(vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // Form to enter idea
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = CardBackground),
-            border = BorderStroke(1.dp, CardBorder)
+        // High fidelity Tab Selector inside Mythos Registry
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(8.dp))
+                .background(CardBackground)
+                .border(1.dp, CardBorder, RoundedCornerShape(8.dp))
+                .padding(3.dp)
         ) {
-            Column(modifier = Modifier.padding(14.dp)) {
-                Text(
-                    text = "SINTETIZADOR DE ARQUETIPOS DE MYTHOS",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = CyberTeal,
-                    letterSpacing = 1.sp,
-                    modifier = Modifier.padding(bottom = 6.dp)
+            val modes = listOf("Procesador de Cortex (IA)", "Módulo de Voz (Web Speech)", "Formulario Manual Directo")
+            modes.forEachIndexed { idx, title ->
+                val isSel = registryFormMode == idx
+                val bgCol by animateColorAsState(
+                    targetValue = if (isSel) CyberTeal.copy(alpha = 0.15f) else Color.Transparent,
+                    label = "mode_bg"
                 )
-                Text(
-                    text = "Inyecta una semilla conceptual hablando por el micrófono o escribiendo (ej. 'Eterno Retorno', 'Guardián del Vacío', 'Sombra Digital') para compilar un arquetipo poético a través del LLM Cortex.",
-                    fontSize = 11.sp,
-                    color = Color.White.copy(alpha = 0.5f),
-                    lineHeight = 14.sp,
-                    modifier = Modifier.padding(bottom = 12.dp)
+                val textCol by animateColorAsState(
+                    targetValue = if (isSel) CyberTeal else Color.White.copy(alpha = 0.5f),
+                    label = "mode_text"
                 )
-                
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(bgCol)
+                        .clickable { registryFormMode = idx }
+                        .padding(vertical = 10.dp)
+                        .testTag("mode_tab_$idx"),
+                    contentAlignment = Alignment.Center
                 ) {
-                    OutlinedTextField(
-                        value = ideaInput,
-                        onValueChange = { ideaInput = it },
-                        placeholder = {
-                            Text(
-                                text = if (isListening) "Escuchando... hable ahora" else "Escribe o habla la idea...",
-                                color = Color.White.copy(alpha = 0.35f),
-                                fontSize = 14.sp
-                            )
-                        },
-                        modifier = Modifier
-                            .weight(1f)
-                            .testTag("archetype_input_field"),
-                        singleLine = true,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White,
-                            focusedBorderColor = CyberTeal,
-                            unfocusedBorderColor = CardBorder,
-                            focusedContainerColor = DeepBackground.copy(alpha = 0.5f),
-                            unfocusedContainerColor = DeepBackground.copy(alpha = 0.5f)
-                        ),
-                        shape = RoundedCornerShape(8.dp)
+                    Text(
+                        text = title,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = textCol,
+                        maxLines = 1,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+        }
+
+        if (registryFormMode == 0) {
+            // IA SYNTHESIZER
+            Card(
+                modifier = Modifier.fillMaxWidth().testTag("ai_archetype_form"),
+                colors = CardDefaults.cardColors(containerColor = CardBackground),
+                border = BorderStroke(1.dp, CardBorder)
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Text(
+                        text = "SINTETIZADOR DE ARQUETIPOS DE MYTHOS",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = CyberTeal,
+                        letterSpacing = 1.sp,
+                        modifier = Modifier.padding(bottom = 6.dp)
+                    )
+                    Text(
+                        text = "Inyecta una semilla conceptual hablando por el micrófono o escribiendo (ej. 'Eterno Retorno', 'Guardián del Vacío') para compilar un arquetipo poético a través del LLM Cortex.",
+                        fontSize = 11.sp,
+                        color = Color.White.copy(alpha = 0.5f),
+                        lineHeight = 14.sp,
+                        modifier = Modifier.padding(bottom = 12.dp)
                     )
                     
-                    // VOICE INPUT MIC TRIGGER
-                    Box(
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = ideaInput,
+                            onValueChange = { ideaInput = it },
+                            placeholder = {
+                                Text(
+                                    text = if (isListening) "Escuchando... hable ahora" else "Escribe o habla la idea...",
+                                    color = Color.White.copy(alpha = 0.35f),
+                                    fontSize = 14.sp
+                                )
+                            },
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("archetype_input_field"),
+                            singleLine = true,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White,
+                                focusedBorderColor = CyberTeal,
+                                unfocusedBorderColor = CardBorder,
+                                focusedContainerColor = DeepBackground.copy(alpha = 0.5f),
+                                unfocusedContainerColor = DeepBackground.copy(alpha = 0.5f)
+                            ),
+                            shape = RoundedCornerShape(8.dp)
+                        )
+                        
+                        // VOICE INPUT MIC TRIGGER
+                        Box(
+                            modifier = Modifier
+                                .size(52.dp)
+                                .clip(CircleShape)
+                                .background(if (isListening) CyberTeal.copy(alpha = 0.15f) else DeepBackground)
+                                .border(
+                                    width = 1.5.dp,
+                                    color = if (isListening) CyberTeal else CardBorder,
+                                    shape = CircleShape
+                                )
+                                .clickable {
+                                    if (isListening) {
+                                        viewModel.stopVoiceCapture()
+                                    } else {
+                                        val checkPerm = androidx.core.content.ContextCompat.checkSelfPermission(
+                                            context,
+                                            android.Manifest.permission.RECORD_AUDIO
+                                        )
+                                        if (checkPerm == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                                            viewModel.startVoiceCapture()
+                                        } else {
+                                            permissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+                                        }
+                                    }
+                                }
+                                .testTag("archetype_mic_button"),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (isListening) {
+                                Text("🛑", fontSize = 18.sp)
+                            } else {
+                                Text("🎙️", fontSize = 18.sp)
+                            }
+                        }
+                    }
+                    
+                    // Dynamic Audio Waveform Indicator on active record
+                    if (isListening) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(36.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(CyberTeal.copy(alpha = 0.08f))
+                                .border(BorderStroke(0.5.dp, CyberTeal.copy(alpha = 0.2f)), RoundedCornerShape(8.dp))
+                                .padding(horizontal = 12.dp, vertical = 6.dp),
+                            contentAlignment = Alignment.CenterStart
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                val pulseTransition = rememberInfiniteTransition(label = "pulse")
+                                val alphaScale by pulseTransition.animateFloat(
+                                    initialValue = 0.3f,
+                                    targetValue = 1.0f,
+                                    animationSpec = infiniteRepeatable(
+                                        animation = tween(800, easing = LinearEasing),
+                                        repeatMode = RepeatMode.Reverse
+                                    ),
+                                    label = "alpha"
+                                )
+                                
+                                Box(
+                                    modifier = Modifier
+                                        .size(10.dp)
+                                        .graphicsLayer { alpha = alphaScale }
+                                        .clip(CircleShape)
+                                        .background(CyberTeal)
+                                )
+                                
+                                Row(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(16.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(3.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    for (i in 0 until 12) {
+                                        val targetHeight = remember(rmsLevel) {
+                                            val baseVal = if (rmsLevel > 0.05f) rmsLevel else 0.1f
+                                            val multiplier = when (i % 3) {
+                                                0 -> 0.7f
+                                                1 -> 1.0f
+                                                else -> 0.4f
+                                            }
+                                            (baseVal * multiplier * 16f).coerceIn(3f, 16f)
+                                        }
+                                        val animatedHeight by animateFloatAsState(
+                                            targetValue = targetHeight,
+                                            label = "bar_height"
+                                        )
+                                        Box(
+                                            modifier = Modifier
+                                                .width(2.5.dp)
+                                                .height(animatedHeight.dp)
+                                                .clip(RoundedCornerShape(1.dp))
+                                                .background(CyberTeal.copy(alpha = 0.8f))
+                                        )
+                                    }
+                                }
+                                
+                                Text(
+                                    text = "MODULANDO ESPECTRO",
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = CyberTeal,
+                                    letterSpacing = 1.sp
+                                )
+                            }
+                        }
+                    }
+                    
+                    // Audio Error Message
+                    if (speechError != null) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "⚠️ $speechError",
+                            color = CoherenceLow,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    
+                    Spacer(modifier = Modifier.height(12.dp))
+                    
+                    // Identity Core mapping selection row
+                    Text(
+                        text = "VINCULAR ARQUETIPO CON CONCEPTOS DEL IDENTITY CORE",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White.copy(alpha = 0.6f),
+                        letterSpacing = 0.5.sp
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    
+                    Row(
                         modifier = Modifier
-                            .size(52.dp)
-                            .clip(CircleShape)
-                            .background(if (isListening) CyberTeal.copy(alpha = 0.15f) else DeepBackground)
-                            .border(
-                                width = 1.5.dp,
-                                color = if (isListening) CyberTeal else CardBorder,
-                                shape = CircleShape
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState())
+                            .padding(vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // "Ninguno" custom chip
+                        val isNoneSelected = selectedConcept == "None"
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(if (isNoneSelected) CyberTeal.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.05f))
+                                .border(
+                                    1.dp,
+                                    if (isNoneSelected) CyberTeal else CardBorder,
+                                    RoundedCornerShape(6.dp)
+                                )
+                                .clickable {
+                                    selectedConcept = "None"
+                                    selectedCategory = "None"
+                                }
+                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                                .testTag("invariant_chip_none"),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "Ninguno",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isNoneSelected) CyberTeal else Color.White.copy(alpha = 0.5f)
                             )
-                            .clickable {
+                        }
+
+                        // Invariants list mapping selection chips
+                        identityInvariants.forEach { inv ->
+                            val isChipSelected = selectedConcept == inv.concept
+                            val prefix = when (inv.category.lowercase()) {
+                                "principle", "principles" -> "PRINCIPIO"
+                                "target", "objective", "objectives" -> "OBJETIVO"
+                                "framework", "conceptual framework" -> "MARCO"
+                                "constraint", "constraints" -> "RESTRICCIÓN"
+                                else -> inv.category.uppercase()
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(if (isChipSelected) CyberTeal.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.05f))
+                                    .border(
+                                        1.dp,
+                                        if (isChipSelected) CyberTeal else CardBorder,
+                                        RoundedCornerShape(6.dp)
+                                    )
+                                    .clickable {
+                                        if (isChipSelected) {
+                                            selectedConcept = "None"
+                                            selectedCategory = "None"
+                                        } else {
+                                            selectedConcept = inv.concept
+                                            selectedCategory = inv.category
+                                        }
+                                    }
+                                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                                    .testTag("invariant_chip_${inv.concept.replace(" ", "_")}"),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "[$prefix] ${inv.concept}",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isChipSelected) CyberTeal else Color.White.copy(alpha = 0.5f)
+                                )
+                            }
+                        }
+                    }
+                    
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = if (selectedConcept == "None") "El arquetipo no estará acoplado a un invariante específico." else "Vínculo asignado: $selectedConcept ($selectedCategory)",
+                        fontSize = 10.sp,
+                        color = if (selectedConcept == "None") Color.White.copy(alpha = 0.4f) else CyberTeal,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.testTag("selected_invariant_chip")
+                    )
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Button(
+                        onClick = {
+                            if (ideaInput.isNotBlank()) {
+                                viewModel.synthesizeNewArchetype(ideaInput, selectedConcept, selectedCategory)
+                                ideaInput = ""
+                            }
+                        },
+                        enabled = ideaInput.isNotBlank() && !isSynthesizing,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = CyberTeal,
+                            contentColor = DeepBackground,
+                            disabledContainerColor = CyberTeal.copy(alpha = 0.12f),
+                            disabledContentColor = Color.White.copy(alpha = 0.3f)
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(44.dp)
+                            .testTag("synthesize_archetype_button"),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        if (isSynthesizing) {
+                            CircularProgressIndicator(
+                                color = DeepBackground,
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "SINTETIZANDO...",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 1.sp
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Outlined.Edit,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "SINTETIZAR ARQUETIPO COGNITIVO",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 1.sp
+                            )
+                        }
+                    }
+                }
+            }
+        } else if (registryFormMode == 1) {
+            // PORTAL DE DECODIFICACIÓN DE VOZ (WEB SPEECH)
+            Card(
+                modifier = Modifier.fillMaxWidth().testTag("voice_portal_form"),
+                colors = CardDefaults.cardColors(containerColor = CardBackground),
+                border = BorderStroke(1.dp, CardBorder)
+            ) {
+                Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        text = "PORTAL DE DECODIFICACIÓN DE VOZ (WEB SPEECH)",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = CyberTeal,
+                        letterSpacing = 1.sp
+                    )
+                    Text(
+                        text = "Activa la captura en tiempo real sustentada en el estándar de Web Speech para registrar fragmentos narrativos hablados directamente en el Mythos Registry. El sistema procesará el habla, generará la transcripción textual y aplicará una clasificación semántica con vectores de similitud contra el Identity Core.",
+                        fontSize = 11.sp,
+                        color = Color.White.copy(alpha = 0.5f),
+                        lineHeight = 14.sp
+                    )
+                    
+                    // Microphone / capture trigger
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Button(
+                            onClick = {
                                 if (isListening) {
                                     viewModel.stopVoiceCapture()
+                                    // Automatically trigger transcription processing when they click stop
+                                    if (partialText.isNotBlank()) {
+                                        viewModel.tagAndSynthesizeSpokenFragment(partialText)
+                                    }
                                 } else {
                                     val checkPerm = androidx.core.content.ContextCompat.checkSelfPermission(
                                         context,
@@ -1897,151 +2271,533 @@ fun ArchetypesView(viewModel: MythosViewModel) {
                                         permissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
                                     }
                                 }
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (isListening) CoherenceLow else CyberTeal,
+                                contentColor = DeepBackground
+                            ),
+                            modifier = Modifier.weight(1f).height(44.dp).testTag("voice_capture_toggle"),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (isListening) Icons.Outlined.Close else Icons.Outlined.PlayArrow,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = if (isListening) "DETENER CAPTURA" else "INICIAR CAPTURA DE VOZ",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        if (voiceFragmentTranscription.isNotBlank() || partialText.isNotBlank()) {
+                            OutlinedButton(
+                                onClick = {
+                                    viewModel.clearSpeechText()
+                                    android.widget.Toast.makeText(context, "Portal de voz limpiado", android.widget.Toast.LENGTH_SHORT).show()
+                                },
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White.copy(alpha = 0.6f)),
+                                border = BorderStroke(1.dp, CardBorder),
+                                modifier = Modifier.height(44.dp).testTag("voice_clear_button"),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text("LIMPIAR", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
-                            .testTag("archetype_mic_button"),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (isListening) {
-                            Text("🛑", fontSize = 18.sp)
-                        } else {
-                            Text("🎙️", fontSize = 18.sp)
                         }
                     }
-                }
-                
-                // Dynamic Audio Waveform Indicator on active record
-                if (isListening) {
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(36.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(CyberTeal.copy(alpha = 0.08f))
-                            .border(BorderStroke(0.5.dp, CyberTeal.copy(alpha = 0.2f)), RoundedCornerShape(8.dp))
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
-                        contentAlignment = Alignment.CenterStart
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+
+                    // Acoustic activity wave
+                    if (isListening) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(40.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(CyberTeal.copy(alpha = 0.08f))
+                                .border(BorderStroke(0.5.dp, CyberTeal.copy(alpha = 0.2f)), RoundedCornerShape(8.dp))
+                                .padding(horizontal = 12.dp),
+                            contentAlignment = Alignment.Center
                         ) {
-                            val infiniteTransition = rememberInfiniteTransition(label = "pulse")
-                            val alphaScale by infiniteTransition.animateFloat(
-                                initialValue = 0.3f,
-                                targetValue = 1.0f,
-                                animationSpec = infiniteRepeatable(
-                                    animation = tween(800, easing = LinearEasing),
-                                    repeatMode = RepeatMode.Reverse
-                                ),
-                                label = "alpha"
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                val pulseAnim = rememberInfiniteTransition("record_pulse")
+                                val recorderAlpha by pulseAnim.animateFloat(
+                                    initialValue = 0.4f,
+                                    targetValue = 1.0f,
+                                    animationSpec = infiniteRepeatable(tween(800, easing = LinearEasing), RepeatMode.Reverse),
+                                    label = "pulse_alpha"
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .size(10.dp)
+                                        .graphicsLayer { alpha = recorderAlpha }
+                                        .clip(CircleShape)
+                                        .background(CoherenceLow)
+                                )
+                                Text(
+                                    text = "RED DE CAPTURA ACTIVA - HABLE AHORA",
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = CoherenceLow,
+                                    letterSpacing = 0.5.sp
+                                )
+                                Spacer(modifier = Modifier.weight(1f))
+                                // RMS level bar animations
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    for (i in 0 until 10) {
+                                        val hVal = remember(rmsLevel) {
+                                            val baseMultiplier = when (i % 3) {
+                                                0 -> 0.6f
+                                                1 -> 1.0f
+                                                else -> 0.4f
+                                            }
+                                            (rmsLevel * baseMultiplier * 20f).coerceIn(4f, 20f)
+                                        }
+                                        val animatedH by animateFloatAsState(targetValue = hVal, label = "wave_h")
+                                        Box(
+                                            modifier = Modifier
+                                                .width(2.dp)
+                                                .height(animatedH.dp)
+                                                .background(CyberTeal)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Audio transcription display
+                    val activeTextToShow = if (isListening) partialText else voiceFragmentTranscription
+                    if (activeTextToShow.isNotBlank()) {
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(
+                                text = if (isListening) "DECIBELES DE HABLA / TRANSCRIPCIÓN EN CURSO (WEB SPEECH):" else "TRANSCRIPCIÓN FINALIZADA:",
+                                fontSize = 8.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isListening) CyberTeal else Color.White.copy(alpha = 0.4f),
+                                letterSpacing = 0.5.sp
                             )
-                            
                             Box(
                                 modifier = Modifier
-                                    .size(10.dp)
-                                    .graphicsLayer { alpha = alphaScale }
-                                    .clip(CircleShape)
-                                    .background(CyberTeal)
-                            )
-                            
-                            Row(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(16.dp),
-                                horizontalArrangement = Arrangement.spacedBy(3.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(DeepBackground)
+                                    .border(1.dp, CardBorder, RoundedCornerShape(6.dp))
+                                    .padding(10.dp)
                             ) {
-                                for (i in 0 until 12) {
-                                    val targetHeight = remember(rmsLevel) {
-                                        val baseVal = if (rmsLevel > 0.05f) rmsLevel else 0.1f
-                                        val multiplier = when (i % 3) {
-                                            0 -> 0.7f
-                                            1 -> 1.0f
-                                            else -> 0.4f
-                                        }
-                                        (baseVal * multiplier * 16f).coerceIn(3f, 16f)
-                                    }
-                                    val animatedHeight by animateFloatAsState(
-                                        targetValue = targetHeight,
-                                        label = "bar_height"
-                                    )
-                                    Box(
-                                        modifier = Modifier
-                                            .width(2.5.dp)
-                                            .height(animatedHeight.dp)
-                                            .clip(RoundedCornerShape(1.dp))
-                                            .background(CyberTeal.copy(alpha = 0.8f))
+                                SelectionContainer {
+                                    Text(
+                                        text = activeTextToShow,
+                                        fontSize = 12.sp,
+                                        color = Color.White,
+                                        lineHeight = 16.sp
                                     )
                                 }
                             }
                             
+                            // Let manual processing trigger if voice recognizer finished but they want to re-parse
+                            if (!isListening && voiceFragmentTranscription.isBlank() && partialText.isNotBlank()) {
+                                Button(
+                                    onClick = { viewModel.tagAndSynthesizeSpokenFragment(partialText) },
+                                    modifier = Modifier.fillMaxWidth().height(36.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = CyberTeal.copy(alpha = 0.1f), contentColor = CyberTeal)
+                                ) {
+                                    Text("PROCESAR TRANSCRIPCIÓN", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+
+                    // Semantic Tagging / AI Synthesis progress
+                    if (isVoiceTaggingActive) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            CircularProgressIndicator(color = CyberTeal, modifier = Modifier.size(24.dp))
                             Text(
-                                text = "MODULANDO ESPECTRO",
+                                text = "PROCESANDO CRUCE COGNITIVO Y ETIQUETADO DE ADN...",
                                 fontSize = 9.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = CyberTeal,
-                                letterSpacing = 1.sp
+                                color = CyberTeal
                             )
                         }
                     }
-                }
-                
-                // Audio Error Message
-                if (speechError != null) {
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = "⚠️ $speechError",
-                        color = CoherenceLow,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-                
-                Spacer(modifier = Modifier.height(12.dp))
-                
-                Button(
-                    onClick = {
-                        if (ideaInput.isNotBlank()) {
-                            viewModel.synthesizeNewArchetype(ideaInput)
-                            ideaInput = ""
+
+                    // Semantic Tagging results view
+                    if (voiceTaggedConcept != null && !isVoiceTaggingActive) {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = DeepBackground),
+                            border = BorderStroke(0.5.dp, CardBorder)
+                        ) {
+                            Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text(
+                                    text = "ETIQUETADO SEMÁNTICO AUTOMÁTICO (IDENTITY CORE)",
+                                    fontSize = 8.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = CyberTeal,
+                                    letterSpacing = 0.5.sp
+                                )
+                                
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column {
+                                        Text(
+                                            text = "PRINCIPIO: ${voiceTaggedConcept!!.uppercase()}",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
+                                        )
+                                        Text(
+                                            text = "CATEGORÍA HARD DE ADN: ${voiceTaggedCategory!!.uppercase()}",
+                                            fontSize = 9.sp,
+                                            color = Color.White.copy(alpha = 0.5f)
+                                        )
+                                    }
+                                    
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(4.dp))
+                                            .background(CyberTeal.copy(alpha = 0.15f))
+                                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                                    ) {
+                                        Text(
+                                            text = "SIMILITUD: ${(voiceTagSimilarity * 100).toInt()}%",
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = CyberTeal
+                                        )
+                                    }
+                                }
+                            }
                         }
-                    },
-                    enabled = ideaInput.isNotBlank() && !isSynthesizing,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = CyberTeal,
-                        contentColor = DeepBackground,
-                        disabledContainerColor = CyberTeal.copy(alpha = 0.12f),
-                        disabledContentColor = Color.White.copy(alpha = 0.3f)
-                    ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(44.dp)
-                        .testTag("synthesize_archetype_button"),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    if (isSynthesizing) {
-                        CircularProgressIndicator(
-                            color = DeepBackground,
-                            modifier = Modifier.size(18.dp),
-                            strokeWidth = 2.dp
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
+                    }
+
+                    // Preview of the synthesized/generated archetype
+                    if (voiceGeneratedArchetype != null && !isVoiceTaggingActive) {
+                        Card(
+                            modifier = Modifier.fillMaxWidth().testTag("voice_archetype_preview"),
+                            colors = CardDefaults.cardColors(containerColor = CyberTeal.copy(alpha = 0.04f)),
+                            border = BorderStroke(1.dp, CyberTeal.copy(alpha = 0.25f))
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text(
+                                    text = "ARQUETIPO COMPILADO DESDE FRAGMENTO HABLADO",
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = CyberTeal,
+                                    letterSpacing = 0.5.sp
+                                )
+                                
+                                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Text(
+                                        text = voiceGeneratedArchetype!!.name.uppercase(),
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White
+                                    )
+                                    Text(
+                                        text = voiceGeneratedArchetype!!.description,
+                                        fontSize = 11.sp,
+                                        color = Color.White.copy(alpha = 0.7f),
+                                        lineHeight = 14.sp
+                                    )
+                                }
+
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = CardDefaults.cardColors(containerColor = CardBackground.copy(alpha = 0.5f)),
+                                    border = BorderStroke(0.5.dp, CardBorder)
+                                ) {
+                                    Column(modifier = Modifier.padding(8.dp)) {
+                                        Text(
+                                            text = "FRAGMENTO TESTIMONIAL (PHYTOM):",
+                                            fontSize = 8.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = CyberTeal
+                                        )
+                                        SelectionContainer {
+                                            Text(
+                                                text = "\"${voiceGeneratedArchetype!!.narrativeSnippet}\"",
+                                                fontSize = 11.sp,
+                                                color = Color.White,
+                                                fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                                                lineHeight = 14.sp
+                                            )
+                                        }
+                                    }
+                                }
+                                
+                                Button(
+                                    onClick = {
+                                        viewModel.saveVoiceArchetype()
+                                        android.widget.Toast.makeText(context, "¡Anclaje de Voz Cristalizado en el Registro!", android.widget.Toast.LENGTH_SHORT).show()
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = CyberTeal, contentColor = DeepBackground),
+                                    modifier = Modifier.fillMaxWidth().height(40.dp).testTag("save_voice_archetype_button"),
+                                    shape = RoundedCornerShape(6.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Check,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("CRISTALIZAR FRAGMENTO EN EL REGISTRO", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            // MANUAL FORM DEFINITION
+            Card(
+                modifier = Modifier.fillMaxWidth().testTag("manual_archetype_form"),
+                colors = CardDefaults.cardColors(containerColor = CardBackground),
+                border = BorderStroke(1.dp, CardBorder)
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Text(
+                        text = "CALIBRACIÓN MANUAL DE FRAGMENTO NARRATIVO",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = CyberTeal,
+                        letterSpacing = 1.sp,
+                        modifier = Modifier.padding(bottom = 6.dp)
+                    )
+                    Text(
+                        text = "Define directamente en la base de datos local un fragmento de arquetipo personalizado, permitiendo acoplar la lattice mítica con los invariantes del sistema.",
+                        fontSize = 11.sp,
+                        color = Color.White.copy(alpha = 0.5f),
+                        lineHeight = 14.sp,
+                        modifier = Modifier.padding(bottom = 12.dp)
+                    )
+
+                    OutlinedTextField(
+                        value = manualName,
+                        onValueChange = { manualName = it },
+                        label = { Text("Nombre del Arquetipo (ej. 'Eterno Retorno')", color = CyberTeal.copy(alpha = 0.7f), fontSize = 11.sp) },
+                        modifier = Modifier.fillMaxWidth().testTag("manual_archetype_name"),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = CyberTeal,
+                            unfocusedBorderColor = CardBorder,
+                            focusedContainerColor = DeepBackground.copy(alpha = 0.5f),
+                            unfocusedContainerColor = DeepBackground.copy(alpha = 0.5f)
+                        ),
+                        shape = RoundedCornerShape(8.dp)
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    OutlinedTextField(
+                        value = manualDesc,
+                        onValueChange = { manualDesc = it },
+                        label = { Text("Función Sistémica o Descripción conceptual", color = CyberTeal.copy(alpha = 0.7f), fontSize = 11.sp) },
+                        modifier = Modifier.fillMaxWidth().testTag("manual_archetype_desc"),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = CyberTeal,
+                            unfocusedBorderColor = CardBorder,
+                            focusedContainerColor = DeepBackground.copy(alpha = 0.5f),
+                            unfocusedContainerColor = DeepBackground.copy(alpha = 0.5f)
+                        ),
+                        shape = RoundedCornerShape(8.dp)
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    OutlinedTextField(
+                        value = manualSnippet,
+                        onValueChange = { manualSnippet = it },
+                        label = { Text("Fragmento de Testimonio de PHYTOM (primera persona)", color = CyberTeal.copy(alpha = 0.7f), fontSize = 11.sp) },
+                        modifier = Modifier.fillMaxWidth().height(90.dp).testTag("manual_archetype_snippet"),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = CyberTeal,
+                            unfocusedBorderColor = CardBorder,
+                            focusedContainerColor = DeepBackground.copy(alpha = 0.5f),
+                            unfocusedContainerColor = DeepBackground.copy(alpha = 0.5f)
+                        ),
+                        shape = RoundedCornerShape(8.dp)
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Resonance Slider
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Text(
-                            text = "SINTETIZANDO...",
+                            text = "Λ RESONANCIA DE TEORÍA:",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White.copy(alpha = 0.6f)
+                        )
+                        Text(
+                            text = "${"%.2f".format(manualCoherence)}",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.sp
+                            color = CyberTeal
                         )
-                    } else {
-                        Icon(
-                            imageVector = Icons.Outlined.Edit,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp)
+                    }
+                    Slider(
+                        value = manualCoherence.toFloat(),
+                        onValueChange = { manualCoherence = it.toDouble() },
+                        valueRange = 0.40f..1.00f,
+                        modifier = Modifier.fillMaxWidth().testTag("manual_archetype_coherence"),
+                        colors = SliderDefaults.colors(
+                            thumbColor = CyberTeal,
+                            activeTrackColor = CyberTeal,
+                            inactiveTrackColor = CardBorder
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+                    
+                    // Identity selection row
+                    Text(
+                        text = "VINCULAR ARQUETIPO CON CONCEPTOS DEL IDENTITY CORE",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White.copy(alpha = 0.6f),
+                        letterSpacing = 0.5.sp
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState())
+                            .padding(vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // "Ninguno" custom chip
+                        val isNoneSelected = selectedConcept == "None"
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(if (isNoneSelected) CyberTeal.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.05f))
+                                .border(
+                                    1.dp,
+                                    if (isNoneSelected) CyberTeal else CardBorder,
+                                    RoundedCornerShape(6.dp)
+                                )
+                                .clickable {
+                                    selectedConcept = "None"
+                                    selectedCategory = "None"
+                                }
+                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                                .testTag("manual_invariant_chip_none"),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "Ninguno",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isNoneSelected) CyberTeal else Color.White.copy(alpha = 0.5f)
+                            )
+                        }
+
+                        // Invariants list mapping selection chips
+                        identityInvariants.forEach { inv ->
+                            val isChipSelected = selectedConcept == inv.concept
+                            val prefix = when (inv.category.lowercase()) {
+                                "principle", "principles" -> "PRINCIPIO"
+                                "target", "objective", "objectives" -> "OBJETIVO"
+                                "framework", "conceptual framework" -> "MARCO"
+                                "constraint", "constraints" -> "RESTRICCIÓN"
+                                else -> inv.category.uppercase()
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(if (isChipSelected) CyberTeal.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.05f))
+                                    .border(
+                                        1.dp,
+                                        if (isChipSelected) CyberTeal else CardBorder,
+                                        RoundedCornerShape(6.dp)
+                                    )
+                                    .clickable {
+                                        if (isChipSelected) {
+                                            selectedConcept = "None"
+                                            selectedCategory = "None"
+                                        } else {
+                                            selectedConcept = inv.concept
+                                            selectedCategory = inv.category
+                                        }
+                                    }
+                                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                                    .testTag("manual_invariant_chip_${inv.concept.replace(" ", "_")}"),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "[$prefix] ${inv.concept}",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isChipSelected) CyberTeal else Color.White.copy(alpha = 0.5f)
+                                )
+                            }
+                        }
+                    }
+                    
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = if (selectedConcept == "None") "El arquetipo no estará acoplado a un invariante específico." else "Vínculo asignado: $selectedConcept ($selectedCategory)",
+                        fontSize = 11.sp,
+                        color = if (selectedConcept == "None") Color.White.copy(alpha = 0.4f) else CyberTeal,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.testTag("selected_invariant_chip")
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Button(
+                        onClick = {
+                            if (manualName.isNotBlank() && manualDesc.isNotBlank() && manualSnippet.isNotBlank()) {
+                                viewModel.insertNarrativeArchetype(
+                                    name = manualName,
+                                    description = manualDesc,
+                                    narrativeSnippet = manualSnippet,
+                                    alignmentCoherence = manualCoherence,
+                                    mappedConcept = selectedConcept,
+                                    mappedCategory = selectedCategory
+                                )
+                                manualName = ""
+                                manualDesc = ""
+                                manualSnippet = ""
+                                selectedConcept = "None"
+                                selectedCategory = "None"
+                                android.widget.Toast.makeText(context, "Fragmento guardado y acoplado perfectamente", android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        enabled = manualName.isNotBlank() && manualDesc.isNotBlank() && manualSnippet.isNotBlank(),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = CyberTeal,
+                            contentColor = DeepBackground,
+                            disabledContainerColor = CyberTeal.copy(alpha = 0.12f),
+                            disabledContentColor = Color.White.copy(alpha = 0.3f)
+                        ),
+                        modifier = Modifier.fillMaxWidth().height(44.dp).testTag("register_archetype_button"),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
                         Text(
-                            text = "SINTETIZAR ARQUETIPO COGNITIVO",
+                            text = "REGISTRAR FRAGMENTO DE ARCHIVO",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             letterSpacing = 1.sp
@@ -2242,7 +2998,51 @@ fun ArchetypeCard(archetype: NarrativeArchetype, highlight: Boolean) {
                 }
             }
             
-            Spacer(modifier = Modifier.height(8.dp))
+            if (archetype.mappedIdentityConcept != "None") {
+                Spacer(modifier = Modifier.height(10.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(CyberTeal.copy(alpha = 0.08f))
+                        .border(BorderStroke(0.5.dp, CyberTeal.copy(alpha = 0.25f)), RoundedCornerShape(6.dp))
+                        .padding(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Star,
+                        contentDescription = "Mapped Concept Icon Badge",
+                        tint = CyberTeal,
+                        modifier = Modifier.size(12.dp)
+                    )
+                    Column {
+                        val categoryDisplay = when (archetype.mappedCategory.lowercase()) {
+                            "principle", "principles" -> "PRINCIPIO INTERNO"
+                            "target", "objective", "objectives" -> "OBJETIVO RECTOR"
+                            "framework", "conceptual framework" -> "MARCO DE REFERENCIA"
+                            "constraint", "constraints" -> "RESTRICCIÓN DE COHERENCIA"
+                            else -> archetype.mappedCategory.uppercase()
+                        }
+                        Text(
+                            text = categoryDisplay,
+                            fontSize = 7.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = CyberTeal.copy(alpha = 0.62f),
+                            letterSpacing = 0.5.sp
+                        )
+                        Text(
+                            text = archetype.mappedIdentityConcept,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = CyberTeal,
+                            lineHeight = 13.sp
+                        )
+                    }
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(10.dp))
             
             val context = LocalContext.current
             Row(
@@ -3258,4 +4058,718 @@ fun RejectionsView(viewModel: MythosViewModel) {
         }
     }
 }
+
+@Composable
+fun NeuralMemoryView(viewModel: MythosViewModel) {
+    val memoryList by viewModel.neuralMemoryList.collectAsStateWithLifecycle()
+    val searchQuery by viewModel.neuralSearchQuery.collectAsStateWithLifecycle()
+    val invariants by viewModel.identityInvariants.collectAsStateWithLifecycle()
+    
+    var infoInput by remember { mutableStateOf("") }
+    var selectedFilterInvariant by remember { mutableStateOf("All") }
+    
+    val context = androidx.compose.ui.platform.LocalContext.current
+    
+    val displayMemories = remember(memoryList, searchQuery) {
+        if (searchQuery.isBlank()) {
+            memoryList
+        } else {
+            val queryVector = com.example.cognitive.NeuralEncoder.encode(searchQuery)
+            memoryList.map { entry ->
+                val similarity = com.example.cognitive.NeuralEncoder.cosineSimilarity(queryVector, entry.getVector())
+                entry to similarity
+            }.sortedByDescending { it.second }
+             .map { it.first }
+        }
+    }
+    
+    val filteredMemories = remember(displayMemories, selectedFilterInvariant) {
+        if (selectedFilterInvariant == "All") {
+            displayMemories
+        } else {
+            displayMemories.filter { it.associatedInvariantConcept == selectedFilterInvariant }
+        }
+    }
+    
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+            .testTag("neural_memory_view"),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = CardBackground),
+            border = BorderStroke(1.dp, CardBorder)
+        ) {
+            Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    text = "MEMORIA VECTORIAL NEURAL (CACHE DE ENTRADA)",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = CyberTeal,
+                    letterSpacing = 1.sp
+                )
+                Text(
+                    text = "Introduce percepciones, hechos o información externa. Al ingresarla, se procesa un vector determinista de 32D para su almacenamiento indexado y se vincula automáticamente con las invariantes de identidad más afines de la capa DNA.",
+                    fontSize = 11.sp,
+                    color = Color.White.copy(alpha = 0.5f),
+                    lineHeight = 14.sp
+                )
+                
+                OutlinedTextField(
+                    value = infoInput,
+                    onValueChange = { infoInput = it },
+                    placeholder = {
+                        Text("Introduce información a indexar radialmente...", color = Color.White.copy(alpha = 0.3f), fontSize = 13.sp)
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(80.dp)
+                        .testTag("neural_memory_input"),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = CyberTeal,
+                        unfocusedBorderColor = CardBorder,
+                        focusedContainerColor = DeepBackground.copy(alpha = 0.5f),
+                        unfocusedContainerColor = DeepBackground.copy(alpha = 0.5f)
+                    ),
+                    shape = RoundedCornerShape(8.dp)
+                )
+                
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = {
+                            if (infoInput.isNotBlank()) {
+                                viewModel.cacheIncomingInformation(infoInput)
+                                infoInput = ""
+                                android.widget.Toast.makeText(context, "Información indexada en el almacén de vectores", android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        enabled = infoInput.isNotBlank(),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = CyberTeal,
+                            contentColor = DeepBackground,
+                            disabledContainerColor = CyberTeal.copy(alpha = 0.12f),
+                            disabledContentColor = Color.White.copy(alpha = 0.3f)
+                        ),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(40.dp)
+                            .testTag("cache_neural_memory_button"),
+                        shape = RoundedCornerShape(6.dp)
+                    ) {
+                        Icon(imageVector = Icons.Outlined.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("INDEXAR EN MEMORIA", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                    
+                    if (memoryList.isNotEmpty()) {
+                        OutlinedButton(
+                            onClick = {
+                                viewModel.clearNeuralMemory()
+                                android.widget.Toast.makeText(context, "Índice de memoria zonal vaciado", android.widget.Toast.LENGTH_SHORT).show()
+                            },
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = CoherenceLow
+                            ),
+                            border = BorderStroke(1.dp, CoherenceLow.copy(alpha = 0.4f)),
+                            modifier = Modifier
+                                .height(40.dp)
+                                .testTag("clear_neural_memory_button"),
+                            shape = RoundedCornerShape(6.dp)
+                        ) {
+                            Icon(imageVector = Icons.Outlined.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("LIMPIAR", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
+        
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = CardBackground.copy(alpha = 0.6f)),
+            border = BorderStroke(1.dp, CardBorder)
+        ) {
+            Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = "BÚSQUEDA SEMÁNTICA (COSINE K-NEAREST)",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = CyberCyan,
+                    letterSpacing = 1.sp
+                )
+                Text(
+                    text = "Codifica la consulta de entrada a un vector 32D y reordena los fragmentos por similitud cosenoidal en tiempo real.",
+                    fontSize = 11.sp,
+                    color = Color.White.copy(alpha = 0.5f),
+                    lineHeight = 14.sp
+                )
+                
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { viewModel.setNeuralSearchQuery(it) },
+                    placeholder = {
+                        Text("Escribe un concepto de consulta (ej. 'red neuronal'...) ", color = Color.White.copy(alpha = 0.3f), fontSize = 13.sp)
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("neural_memory_search_input"),
+                    singleLine = true,
+                    leadingIcon = {
+                        Icon(imageVector = Icons.Outlined.Search, contentDescription = null, tint = CyberCyan)
+                    },
+                    trailingIcon = {
+                        if (searchQuery.isNotEmpty()) {
+                            IconButton(onClick = { viewModel.setNeuralSearchQuery("") }) {
+                                Icon(imageVector = Icons.Outlined.Close, contentDescription = "Clear search", tint = Color.White.copy(alpha = 0.4f))
+                            }
+                        }
+                    },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = CyberCyan,
+                        unfocusedBorderColor = CardBorder,
+                        focusedContainerColor = DeepBackground.copy(alpha = 0.5f),
+                        unfocusedContainerColor = DeepBackground.copy(alpha = 0.5f)
+                    ),
+                    shape = RoundedCornerShape(8.dp)
+                )
+            }
+        }
+        
+        if (invariants.isNotEmpty()) {
+            Text(
+                text = "FILTRAR POR INVARIANTE (COHERENCIA ADN)",
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White.copy(alpha = 0.6f),
+                letterSpacing = 0.5.sp,
+                modifier = Modifier.padding(top = 4.dp, bottom = 2.dp)
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                val isAllSelected = selectedFilterInvariant == "All"
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(if (isAllSelected) CyberTeal.copy(alpha = 0.15f) else CardBackground)
+                        .border(1.dp, if (isAllSelected) CyberTeal else CardBorder, RoundedCornerShape(6.dp))
+                        .clickable { selectedFilterInvariant = "All" }
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                        .testTag("filter_chip_all"),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Todos (${memoryList.size})",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isAllSelected) CyberTeal else Color.White.copy(alpha = 0.5f)
+                    )
+                }
+                
+                invariants.forEach { inv ->
+                    val isSelected = selectedFilterInvariant == inv.concept
+                    val count = memoryList.count { it.associatedInvariantConcept == inv.concept }
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(if (isSelected) CyberTeal.copy(alpha = 0.15f) else CardBackground)
+                            .border(1.dp, if (isSelected) CyberTeal else CardBorder, RoundedCornerShape(6.dp))
+                            .clickable { selectedFilterInvariant = inv.concept }
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                            .testTag("filter_chip_${inv.concept.replace(" ", "_")}"),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "${inv.concept} ($count)",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isSelected) CyberTeal else Color.White.copy(alpha = 0.5f)
+                        )
+                    }
+                }
+            }
+        }
+        
+        Text(
+            text = "RED DE NODOS DE MEMORIA VECTORIAL (${filteredMemories.size})",
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color.White.copy(alpha = 0.6f),
+            letterSpacing = 0.5.sp,
+            modifier = Modifier.padding(top = 4.dp)
+        )
+        
+        if (filteredMemories.isEmpty()) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = CardBackground.copy(alpha = 0.3f)),
+                border = BorderStroke(1.dp, CardBorder.copy(alpha = 0.5f))
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "📡",
+                        fontSize = 24.sp
+                    )
+                    Text(
+                        text = if (searchQuery.isNotEmpty() || selectedFilterInvariant != "All") "Ninguna correlación semántica encontrada" else "Caja de memoria local vacía",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White.copy(alpha = 0.4f)
+                    )
+                }
+            }
+        } else {
+            filteredMemories.forEach { memory ->
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("memory_entry_card_${memory.id}"),
+                    colors = CardDefaults.cardColors(containerColor = CardBackground),
+                    border = BorderStroke(1.dp, CardBorder)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        val vector = remember(memory.vectorCsv) { memory.getVector() }
+                        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(1.dp)
+                            ) {
+                                vector.forEach { value ->
+                                    val alphaVal = ((value + 0.3f) / 1.0f).coerceIn(0.1f, 1.0f)
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .height(4.dp)
+                                            .background(CyberTeal.copy(alpha = alphaVal))
+                                    )
+                                }
+                            }
+                            Text(
+                                text = "FIRMA VECTORIAL DE 32 DIMENSIONES",
+                                fontSize = 7.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = CyberTeal.copy(alpha = 0.5f),
+                                letterSpacing = 0.5.sp
+                            )
+                        }
+                        
+                        SelectionContainer {
+                            Text(
+                                text = memory.infoText,
+                                fontSize = 12.sp,
+                                color = Color.White,
+                                lineHeight = 16.sp
+                            )
+                        }
+                        
+                        HorizontalDivider(color = CardBorder.copy(alpha = 0.4f), thickness = 0.5.dp)
+                        
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                if (memory.associatedInvariantConcept != "None") {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.Share,
+                                            contentDescription = null,
+                                            tint = CyberTeal,
+                                            modifier = Modifier.size(10.dp)
+                                        )
+                                        Text(
+                                            text = "VÍNCULO COGNITIVO: ${memory.associatedInvariantConcept}",
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = CyberTeal
+                                        )
+                                    }
+                                    Text(
+                                        text = "Acoplamiento de ADN: ${(memory.associationSimilarity * 100).toInt()}% de aproximación",
+                                        fontSize = 8.sp,
+                                        color = Color.White.copy(alpha = 0.4f)
+                                    )
+                                } else {
+                                    Text(
+                                        text = "Sin acoplamiento de ADN fuerte",
+                                        fontSize = 8.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White.copy(alpha = 0.3f)
+                                    )
+                                }
+                            }
+                            
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                OutlinedButton(
+                                    onClick = {
+                                        viewModel.processPerception(memory.infoText)
+                                        android.widget.Toast.makeText(context, "Emitido a la red neuronal activa como percepción", android.widget.Toast.LENGTH_SHORT).show()
+                                    },
+                                    border = BorderStroke(0.5.dp, CyberCyan.copy(alpha = 0.5f)),
+                                    colors = ButtonDefaults.outlinedButtonColors(
+                                        contentColor = CyberCyan
+                                    ),
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                    modifier = Modifier.height(28.dp),
+                                    shape = RoundedCornerShape(4.dp)
+                                ) {
+                                    Icon(imageVector = Icons.AutoMirrored.Outlined.Send, contentDescription = null, modifier = Modifier.size(10.dp))
+                                    Spacer(modifier = Modifier.width(3.dp))
+                                    Text("EMITIR", fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                }
+                                
+                                IconButton(
+                                    onClick = {
+                                        viewModel.deleteNeuralMemory(memory.id)
+                                        android.widget.Toast.makeText(context, "Registro removido del almacén vectorial", android.widget.Toast.LENGTH_SHORT).show()
+                                    },
+                                    modifier = Modifier.size(28.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Delete,
+                                        contentDescription = "Remover",
+                                        tint = CoherenceLow.copy(alpha = 0.7f),
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun NarrativeAnchorsView(viewModel: MythosViewModel) {
+    val anchors by viewModel.narrativeAnchors.collectAsStateWithLifecycle()
+    val isSynthesizing by viewModel.isSynthesizingAnchors.collectAsStateWithLifecycle()
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+            .testTag("narrative_anchors_view"),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = CardBackground),
+            border = BorderStroke(1.dp, CardBorder)
+        ) {
+            Column(
+                modifier = Modifier.padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text(
+                    text = "ANCLAJES NARRATIVOS (MYTHOS COUPLING)",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = CyberCyan,
+                    letterSpacing = 1.sp
+                )
+                Text(
+                    text = "Este módulo cruza periódicamente los Arquetipos Narrativos compilados con las Invariantes de ADN de Identidad. El cruce consolida un puente semántico que arraiga los arquetipos abstractos en principios inquebrantables, generando anclajes formales de estabilidad cognitiva.",
+                    fontSize = 11.sp,
+                    color = Color.White.copy(alpha = 0.5f),
+                    lineHeight = 14.sp
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Button(
+                        onClick = {
+                            viewModel.synthesizeNarrativeAnchors(force = true)
+                            android.widget.Toast.makeText(context, "Iniciando cruce de fase sintérgico remoto/local...", android.widget.Toast.LENGTH_SHORT).show()
+                        },
+                        enabled = !isSynthesizing,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = CyberCyan,
+                            contentColor = DeepBackground,
+                            disabledContainerColor = CyberCyan.copy(alpha = 0.12f),
+                            disabledContentColor = Color.White.copy(alpha = 0.3f)
+                        ),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(40.dp)
+                            .testTag("synthesize_anchors_button"),
+                        shape = RoundedCornerShape(6.dp)
+                    ) {
+                        if (isSynthesizing) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                color = DeepBackground,
+                                strokeWidth = 2.dp
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("SINTETIZANDO...", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        } else {
+                            Icon(
+                                imageVector = Icons.Outlined.Refresh,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("SINTETIZAR ANCLAJE", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    if (anchors.isNotEmpty()) {
+                        OutlinedButton(
+                            onClick = {
+                                viewModel.clearNarrativeAnchors()
+                                android.widget.Toast.makeText(context, "Lattice de anclajes purgada", android.widget.Toast.LENGTH_SHORT).show()
+                            },
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = CoherenceLow
+                            ),
+                            border = BorderStroke(1.dp, CoherenceLow.copy(alpha = 0.4f)),
+                            modifier = Modifier
+                                .height(40.dp)
+                                .testTag("clear_anchors_button"),
+                            shape = RoundedCornerShape(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Delete,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("RESETEAR LICES", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
+
+        Text(
+            text = "CRISTALIZACIONES ACTIVAS DE ANCLAJE (${anchors.size})",
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color.White.copy(alpha = 0.6f),
+            letterSpacing = 0.5.sp,
+            modifier = Modifier.padding(top = 4.dp, bottom = 2.dp)
+        )
+
+        if (anchors.isEmpty()) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = CardBackground.copy(alpha = 0.3f)),
+                border = BorderStroke(1.dp, CardBorder.copy(alpha = 0.5f))
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "🌌",
+                        fontSize = 24.sp
+                    )
+                    Text(
+                        text = "Lattice de anclajes en reposo. Se ejecutará una síntesis periódica automática cada 90s, o presiona 'Sintetizar Anclaje' para provocar una cristalización de fase.",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White.copy(alpha = 0.4f),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        lineHeight = 14.sp
+                    )
+                }
+            }
+        } else {
+            anchors.forEach { anchor ->
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("narrative_anchor_card_${anchor.id}"),
+                    colors = CardDefaults.cardColors(containerColor = CardBackground),
+                    border = BorderStroke(1.dp, CardBorder)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = anchor.anchorTitle.uppercase(),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = CyberCyan,
+                                modifier = Modifier.weight(1f)
+                            )
+                            IconButton(
+                                onClick = {
+                                    viewModel.deleteNarrativeAnchor(anchor.id)
+                                    android.widget.Toast.makeText(context, "Anclaje removido de la lattice", android.widget.Toast.LENGTH_SHORT).show()
+                                },
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Delete,
+                                    contentDescription = "Remover",
+                                    tint = CoherenceLow.copy(alpha = 0.6f),
+                                    modifier = Modifier.size(12.dp)
+                                )
+                            }
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(3.dp))
+                                    .background(CyberTeal.copy(alpha = 0.1f))
+                                    .border(0.5.dp, CyberTeal.copy(alpha = 0.4f), RoundedCornerShape(3.dp))
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = "Arquetipo: ${anchor.archetypeName}",
+                                    fontSize = 8.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = CyberTeal
+                                )
+                            }
+
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(3.dp))
+                                    .background(Color.White.copy(alpha = 0.05f))
+                                    .border(0.5.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(3.dp))
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = "ADN: ${anchor.invariantConcept}",
+                                    fontSize = 8.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White.copy(alpha = 0.6f)
+                                )
+                            }
+                        }
+
+                        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(3.dp),
+                                horizontalArrangement = Arrangement.spacedBy(1.dp)
+                            ) {
+                                val activeBlocks = (anchor.cohesionScore * 10).toInt().coerceIn(1, 10)
+                                for (i in 0 until 10) {
+                                    val active = i < activeBlocks
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .height(3.dp)
+                                            .background(if (active) CyberCyan else Color.White.copy(alpha = 0.08f))
+                                    )
+                                }
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = "MEDICIÓN DE ACOPLAMIENTO SINÁPTICO",
+                                    fontSize = 7.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White.copy(alpha = 0.3f),
+                                    letterSpacing = 0.5.sp
+                                )
+                                Text(
+                                    text = "Λ: ${(anchor.cohesionScore * 100).toInt()}% RESONANCIA",
+                                    fontSize = 7.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = CyberCyan,
+                                    letterSpacing = 0.5.sp
+                                )
+                            }
+                        }
+
+                        SelectionContainer {
+                            Text(
+                                text = anchor.anchorDescription,
+                                fontSize = 12.sp,
+                                color = Color.White,
+                                lineHeight = 16.sp
+                            )
+                        }
+
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = DeepBackground.copy(alpha = 0.6f)),
+                            border = BorderStroke(0.5.dp, CardBorder)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(10.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text(
+                                    text = "CRUCE COGNITIVO TRANSPATRONAL:",
+                                    fontSize = 8.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = CyberTeal,
+                                    letterSpacing = 0.5.sp
+                                )
+                                SelectionContainer {
+                                    Text(
+                                        text = anchor.crossReferenceAnalysis,
+                                        fontSize = 11.sp,
+                                        color = Color.White.copy(alpha = 0.8f),
+                                        lineHeight = 15.sp
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 

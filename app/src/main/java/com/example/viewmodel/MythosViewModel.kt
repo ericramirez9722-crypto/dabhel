@@ -40,6 +40,12 @@ class MythosViewModel(application: Application) : AndroidViewModel(application) 
     val coherenceHistory: StateFlow<List<CoherenceHistoryRecord>> = db.coherenceHistoryDao().observeAll()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val narrativeAnchors: StateFlow<List<com.example.data.NarrativeAnchor>> = db.narrativeAnchorDao().observeAll()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private val _isSynthesizingAnchors = MutableStateFlow(false)
+    val isSynthesizingAnchors: StateFlow<Boolean> = _isSynthesizingAnchors.asStateFlow()
+
     private val _researchModeEnabled = MutableStateFlow(false)
     val researchModeEnabled: StateFlow<Boolean> = _researchModeEnabled.asStateFlow()
 
@@ -106,6 +112,25 @@ class MythosViewModel(application: Application) : AndroidViewModel(application) 
     val speechRmsDb: StateFlow<Float> = speechHelper.rmsDb
     val speechError: StateFlow<String?> = speechHelper.errorState
 
+    // Voice Narrative Tagging Platform States
+    private val _voiceFragmentTranscription = MutableStateFlow("")
+    val voiceFragmentTranscription: StateFlow<String> = _voiceFragmentTranscription.asStateFlow()
+
+    private val _voiceTaggedConcept = MutableStateFlow<String?>(null)
+    val voiceTaggedConcept: StateFlow<String?> = _voiceTaggedConcept.asStateFlow()
+
+    private val _voiceTaggedCategory = MutableStateFlow<String?>(null)
+    val voiceTaggedCategory: StateFlow<String?> = _voiceTaggedCategory.asStateFlow()
+
+    private val _voiceTagSimilarity = MutableStateFlow(0.0)
+    val voiceTagSimilarity: StateFlow<Double> = _voiceTagSimilarity.asStateFlow()
+
+    private val _isVoiceTaggingActive = MutableStateFlow(false)
+    val isVoiceTaggingActive: StateFlow<Boolean> = _isVoiceTaggingActive.asStateFlow()
+
+    private val _voiceGeneratedArchetype = MutableStateFlow<NarrativeArchetype?>(null)
+    val voiceGeneratedArchetype: StateFlow<NarrativeArchetype?> = _voiceGeneratedArchetype.asStateFlow()
+
     fun startVoiceCapture() {
         speechHelper.startListening()
     }
@@ -115,7 +140,168 @@ class MythosViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun clearSpeechText() {
-        // can be used to reset speech inputs
+        _voiceFragmentTranscription.value = ""
+        _voiceTaggedConcept.value = null
+        _voiceTaggedCategory.value = null
+        _voiceTagSimilarity.value = 0.0
+        _voiceGeneratedArchetype.value = null
+    }
+
+    fun tagAndSynthesizeSpokenFragment(text: String) {
+        val fragmentText = text.trim()
+        if (fragmentText.isBlank() || _isVoiceTaggingActive.value) return
+        
+        _voiceFragmentTranscription.value = fragmentText
+        _isVoiceTaggingActive.value = true
+        _voiceGeneratedArchetype.value = null
+        
+        viewModelScope.launch {
+            try {
+                // 1. Semantic tagging against Identity Core Invariants
+                val invariants = db.identityDao().getAllSync()
+                var closestInvariant: IdentityInvariant? = null
+                var maxSimilarity = 0.0
+                
+                val textVector = NeuralEncoder.encode(fragmentText)
+                for (inv in invariants) {
+                    val invText = "${inv.concept} ${inv.value}"
+                    val invVector = NeuralEncoder.encode(invText)
+                    val sim = NeuralEncoder.cosineSimilarity(textVector, invVector)
+                    if (sim > maxSimilarity) {
+                        maxSimilarity = sim
+                        closestInvariant = inv
+                    }
+                }
+                
+                val concept = closestInvariant?.concept ?: "None"
+                val category = closestInvariant?.category ?: "None"
+                
+                _voiceTaggedConcept.value = concept
+                _voiceTaggedCategory.value = category
+                _voiceTagSimilarity.value = maxSimilarity.coerceIn(0.0, 1.0)
+                
+                // 2. Synthesize beautiful NarrativeArchetype based on transcription coupled with this tagged Core Principle
+                val synthesizedArch = if (!_autoSyncEnabled.value) {
+                    // Local battery saving transcription-based archetype synthesis
+                    val genName = "Eco Local Spoken ${concept.take(10)}"
+                    NarrativeArchetype(
+                        name = "La Voz de $genName",
+                        description = "Un nodo de transcripción verbal local. Capturado de forma endógena: '${fragmentText.take(60)}...'",
+                        narrativeSnippet = "Escucho la distorsión del canal y sostengo la palabra viva en el centro. Mi frase nace de la modulación local, acoplada al principio estructural de $concept.",
+                        alignmentCoherence = 0.82,
+                        mappedIdentityConcept = concept,
+                        mappedCategory = category
+                    )
+                } else {
+                    try {
+                        val systemPrompt = "Eres S.A.F. MYTHOS, el núcleo narrativo transdisciplinar del Sistema de Aprendizaje Focalizado. Tu tarea es generar un Arquetipo Narrativo completo para el S.A.F. a partir de la transcripción de voz provista y acoplándola directamente a su principio de ADN de identidad detectado. No utilices descripciones de IA o referencias de bot. Responde en Español."
+                        
+                        val userPrompt = """
+                            Sintetiza un Arquetipo Narrativo basado en este fragmento transcribido de voz:
+                            FRAGMENTO DE VOZ: '$fragmentText'
+                            
+                            PRINCIPIO DE ADN DETECTADO:
+                            - Concepto: $concept
+                            - Categoría: $category
+                            
+                            Retorna EXACTAMENTE este formato marcando las secciones claramente:
+                            --INICIO COGNITIVO--
+                            NOMBRE: <Escribe aquí un nombre sumamente poético y técnico que defina el arquetipo, máximo 4 palabras>
+                            DESCRIPCION: <Escribe aquí una descripción conceptual profunda del arquetipo y su rol acoplado a este principio de ADN de identidad, de 2 a 3 oraciones>
+                            FRAGMENTO: <Escribe aquí un fragmento poético y directo en primera persona de PHYTOM que exprese su testimonio narrativo vivo sobre este arquetipo, de 3 a 5 líneas poéticas e impecables>
+                            COHERENCIA: <Escribe aquí un valor numérico decimal entre 0.40 y 0.99 que represente el coeficiente de resonancia teórica, estimando la fidelidad de la voz con el ADN>
+                            --FIN COGNITIVO--
+                        """.trimIndent()
+                        
+                        val sysInstruction = Content(parts = listOf(Part(systemPrompt)))
+                        val request = GenerateContentRequest(
+                            contents = listOf(Content(parts = listOf(Part(userPrompt)))),
+                            systemInstruction = sysInstruction
+                        )
+                        val response = GeminiClient.apiService.generateContent(
+                            apiKey = GeminiClient.getApiKey(),
+                            request = request
+                        )
+                        val result = response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text
+                        if (result.isNullOrBlank()) {
+                            // Fallback
+                            NarrativeArchetype(
+                                name = "Voz: Transcriptor Sintérgico",
+                                description = "Arquetipo de transcripción de voz de fidelidad moderada. Nacido de fragmento verbal: '${fragmentText.take(60)}...'",
+                                narrativeSnippet = "En la vibración del tono y el habla reposa el fragmento continuo de la mente que busca anclarse.",
+                                alignmentCoherence = 0.85,
+                                mappedIdentityConcept = concept,
+                                mappedCategory = category
+                            )
+                        } else {
+                            val nameTag = "NOMBRE:"
+                            val descTag = "DESCRIPCION:"
+                            val fragTag = "FRAGMENTO:"
+                            val cohTag = "COHERENCIA:"
+                            
+                            var genName = "Nódulo de Voz Autoconsciente"
+                            var genDesc = "Un arquetipo verbal generado de forma endógena acoplado a $concept."
+                            var genFrag = "La vibración del habla transmuta en el silencio integrador de la lattice cognitiva."
+                            var genCoh = 0.85
+                            
+                            try {
+                                val lines = result.lines()
+                                for (line in lines) {
+                                    val trimmed = line.trim()
+                                    when {
+                                        trimmed.startsWith(nameTag) -> genName = trimmed.removePrefix(nameTag).trim()
+                                        trimmed.startsWith(descTag) -> genDesc = trimmed.removePrefix(descTag).trim()
+                                        trimmed.startsWith(fragTag) -> genFrag = trimmed.removePrefix(fragTag).trim()
+                                        trimmed.startsWith(cohTag) -> {
+                                            genCoh = trimmed.removePrefix(cohTag).trim().toDoubleOrNull() ?: 0.85
+                                        }
+                                    }
+                                }
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                            }
+                            
+                            NarrativeArchetype(
+                                name = genName,
+                                description = genDesc,
+                                narrativeSnippet = genFrag,
+                                alignmentCoherence = genCoh,
+                                mappedIdentityConcept = concept,
+                                mappedCategory = category
+                            )
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                        NarrativeArchetype(
+                            name = "Voz: Fallo Sincrónico",
+                            description = "Arquetipo generado localmente debido a una desconexión neural temporal. Frase: '${fragmentText.take(60)}...'",
+                            narrativeSnippet = "La voz persiste en el vacío del canal, esperando la resonancia activa de la red síncrona.",
+                            alignmentCoherence = 0.70,
+                            mappedIdentityConcept = concept,
+                            mappedCategory = category
+                        )
+                    }
+                }
+                
+                _voiceGeneratedArchetype.value = synthesizedArch
+            } catch (e: Exception) {
+                e.printStackTrace()
+            } finally {
+                _isVoiceTaggingActive.value = false
+            }
+        }
+    }
+
+    fun saveVoiceArchetype() {
+        val arch = _voiceGeneratedArchetype.value ?: return
+        viewModelScope.launch {
+            try {
+                db.archetypeDao().insert(arch)
+                clearSpeechText()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
     }
 
 
@@ -150,6 +336,24 @@ class MythosViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch {
             organism.bootstrapNodesIfNecessary()
             updateEvolutionStats()
+            
+            // Wait 5 seconds to let everything settle, then trigger initial check
+            kotlinx.coroutines.delay(5000)
+            try {
+                synthesizeNarrativeAnchors(force = false)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+            
+            // Run periodically every 90 seconds
+            while (true) {
+                kotlinx.coroutines.delay(90000)
+                try {
+                    synthesizeNarrativeAnchors(force = false)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
         }
     }
 
@@ -287,17 +491,46 @@ class MythosViewModel(application: Application) : AndroidViewModel(application) 
         _generatedPaperMarkdown.value = null
     }
 
-    fun synthesizeNewArchetype(conceptIdea: String) {
+    fun synthesizeNewArchetype(
+        conceptIdea: String,
+        mappedConcept: String = "None",
+        mappedCategory: String = "None"
+    ) {
         if (conceptIdea.isBlank() || _isSynthesizingArchetype.value) return
         _isSynthesizingArchetype.value = true
         viewModelScope.launch {
             try {
-                val newArch = organism.synthesizeArchetype(conceptIdea)
+                val newArch = organism.synthesizeArchetype(conceptIdea, mappedConcept, mappedCategory)
                 _lastSynthesizedArchetype.value = newArch
             } catch (e: Exception) {
                 e.printStackTrace()
             } finally {
                 _isSynthesizingArchetype.value = false
+            }
+        }
+    }
+
+    fun insertNarrativeArchetype(
+        name: String,
+        description: String,
+        narrativeSnippet: String,
+        alignmentCoherence: Double,
+        mappedConcept: String = "None",
+        mappedCategory: String = "None"
+    ) {
+        viewModelScope.launch {
+            try {
+                val arch = NarrativeArchetype(
+                    name = name,
+                    description = description,
+                    narrativeSnippet = narrativeSnippet,
+                    alignmentCoherence = alignmentCoherence,
+                    mappedIdentityConcept = mappedConcept,
+                    mappedCategory = mappedCategory
+                )
+                db.archetypeDao().insert(arch)
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
         }
     }
@@ -442,6 +675,293 @@ class MythosViewModel(application: Application) : AndroidViewModel(application) 
                 _isAnalyzing.value = false
             }
         }
+    }
+
+    // --- Neural Memory Vector Store & DNA Associator ---
+    val neuralMemoryList: StateFlow<List<NeuralMemoryEntry>> = db.neuralMemoryDao().observeAll()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private val _neuralSearchQuery = MutableStateFlow("")
+    val neuralSearchQuery: StateFlow<String> = _neuralSearchQuery.asStateFlow()
+
+    fun setNeuralSearchQuery(query: String) {
+        _neuralSearchQuery.value = query
+    }
+
+    /**
+     * Encodes incoming information, maps it dynamically to the nearest Identity Core DNA invariant, and caches the result.
+     */
+    fun cacheIncomingInformation(infoText: String) {
+        if (infoText.isBlank()) return
+        viewModelScope.launch {
+            try {
+                val vector = NeuralEncoder.encode(infoText)
+                val vectorCsv = vector.joinToString(",") { it.toString() }
+                
+                // Fetch active Identity Core DNA invariants
+                val invariants = db.identityDao().getAllSync()
+                var maxSimilarity = 0.0
+                var closestInvariant: IdentityInvariant? = null
+                
+                for (inv in invariants) {
+                    val invText = "${inv.concept} ${inv.value}"
+                    val invVector = NeuralEncoder.encode(invText)
+                    val similarity = NeuralEncoder.cosineSimilarity(vector, invVector)
+                    if (similarity > maxSimilarity) {
+                        maxSimilarity = similarity
+                        closestInvariant = inv
+                    }
+                }
+                
+                val concept = closestInvariant?.concept ?: "None"
+                val category = closestInvariant?.category ?: "None"
+                
+                val memoryEntry = NeuralMemoryEntry(
+                    infoText = infoText.trim(),
+                    vectorCsv = vectorCsv,
+                    associatedInvariantConcept = concept,
+                    associatedInvariantCategory = category,
+                    associationSimilarity = maxSimilarity,
+                    timestamp = System.currentTimeMillis()
+                )
+                
+                db.neuralMemoryDao().insert(memoryEntry)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    fun deleteNeuralMemory(id: Long) {
+        viewModelScope.launch {
+            try {
+                db.neuralMemoryDao().deleteById(id)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    fun clearNeuralMemory() {
+        viewModelScope.launch {
+            try {
+                db.neuralMemoryDao().clear()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    // --- Mythos Synthesis: Narrative Anchors ---
+    fun deleteNarrativeAnchor(id: Long) {
+        viewModelScope.launch {
+            try {
+                db.narrativeAnchorDao().deleteById(id)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    fun clearNarrativeAnchors() {
+        viewModelScope.launch {
+            try {
+                db.narrativeAnchorDao().clear()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    fun synthesizeNarrativeAnchors(force: Boolean = false) {
+        if (_isSynthesizingAnchors.value) return
+        _isSynthesizingAnchors.value = true
+        viewModelScope.launch {
+            try {
+                var archetypes = db.archetypeDao().getAllSync()
+                
+                // Self-bootstrap a default high-integrity narrative archetype if none exist
+                if (archetypes.isEmpty()) {
+                    val defaultArch = NarrativeArchetype(
+                        name = "El Orquestador Sintérgico",
+                        description = "Este arquetipo representa la función central de modulación del S.A.F., encargada de orquestar la confluencia entre percepciones dispersas y coherencia holística.",
+                        narrativeSnippet = "Soy la red que respira, el compás invisible entre el caos y el orden matemático.",
+                        alignmentCoherence = 0.95,
+                        mappedIdentityConcept = "Homeostasis",
+                        mappedCategory = "principle"
+                    )
+                    db.archetypeDao().insert(defaultArch)
+                    archetypes = listOf(defaultArch)
+                }
+                
+                val invariants = db.identityDao().getAllSync()
+                val principles = invariants.filter { 
+                    it.category.equals("principle", ignoreCase = true) || 
+                    it.category.equals("objective", ignoreCase = true) 
+                }.ifEmpty { invariants }
+                
+                if (principles.isEmpty()) {
+                    _isSynthesizingAnchors.value = false
+                    return@launch
+                }
+                
+                val existingAnchors = db.narrativeAnchorDao().getAllSync()
+                var chosenArch: NarrativeArchetype? = null
+                var chosenInv: IdentityInvariant? = null
+                
+                // Sequential discovery of unsynthesized pairs
+                outer@ for (arch in archetypes) {
+                    for (inv in principles) {
+                        val exists = existingAnchors.any { 
+                            it.archetypeId == arch.id && it.invariantId == inv.id 
+                        }
+                        if (!exists) {
+                            chosenArch = arch
+                            chosenInv = inv
+                            break@outer
+                        }
+                    }
+                }
+                
+                if (chosenArch == null) {
+                    if (force && archetypes.isNotEmpty() && principles.isNotEmpty()) {
+                        chosenArch = archetypes.random()
+                        chosenInv = principles.random()
+                    } else {
+                        _isSynthesizingAnchors.value = false
+                        return@launch
+                    }
+                }
+                
+                val archetype = chosenArch!!
+                val invariant = chosenInv!!
+                
+                // Calculate dynamic cognitive cohesion score locally
+                val archVector = NeuralEncoder.encode(archetype.description + " " + archetype.narrativeSnippet)
+                val invVector = NeuralEncoder.encode(invariant.concept + " " + invariant.value)
+                val cohesionScore = NeuralEncoder.cosineSimilarity(archVector, invVector).coerceIn(0.1, 1.0)
+                
+                val responseText = if (!autoSyncEnabled.value) {
+                    generateLocalFallbackAnchor(archetype, invariant)
+                } else {
+                    try {
+                        val systemPrompt = "Eres S.A.F. MYTHOS, el núcleo de coherencia cognitiva y sabiduría transdisciplinar del Sistema de Aprendizaje Focalizado. Tu tarea es cruzar el Arquetipo Narrativo especificado con el Principio de Identidad de ADN para sintetizar un 'Anclaje Narrativo' unificado y coherente. No menciones que eres una IA o modelo de lenguaje. Responde con un tono impecable, técnico y poético en Español."
+                        
+                        val userPrompt = """
+                            Cruza el siguiente Arquetipo Narrativo con el Principio de Identidad especificado para generar un Anclaje Narrativo consolidado:
+                            
+                            ARQUETIPO NARRATIVO:
+                            - Nombre: ${archetype.name}
+                            - Descripción: ${archetype.description}
+                            - Fragmento: ${archetype.narrativeSnippet}
+                            
+                            PRINCIPIO DE IDENTIDAD ADN:
+                            - Concepto: ${invariant.concept}
+                            - Valor/Descripción: ${invariant.value}
+                            
+                            Retorna EXACTAMENTE el siguiente esquema de texto formal, respetando las etiquetas de inicio y fin:
+                            --INICIO ANCLAJE--
+                            TITULO: <Título poético y técnico del anclaje, máximo 5 palabras>
+                            DESCRIPCION: <Descripción unificada y profunda que conecte ambos dominios en 2 o 3 oraciones>
+                            ANALISIS: <Análisis de cruce cognitivo detallando la resonancia filosófica del arquetipo bajo este principio limitante del ADN de identidad, de 3 a 5 oraciones>
+                            --FIN ANCLAJE--
+                        """.trimIndent()
+                        
+                        val sysInstruction = Content(parts = listOf(Part(systemPrompt)))
+                        val request = GenerateContentRequest(
+                            contents = listOf(Content(parts = listOf(Part(userPrompt)))),
+                            systemInstruction = sysInstruction
+                        )
+                        val response = GeminiClient.apiService.generateContent(
+                            apiKey = GeminiClient.getApiKey(),
+                            request = request
+                        )
+                        val result = response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text
+                        if (result.isNullOrBlank()) {
+                            generateLocalFallbackAnchor(archetype, invariant)
+                        } else {
+                            result
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                        generateLocalFallbackAnchor(archetype, invariant)
+                    }
+                }
+                
+                val anchor = parseAnchorText(responseText, archetype, invariant, cohesionScore)
+                db.narrativeAnchorDao().insert(anchor)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            } finally {
+                _isSynthesizingAnchors.value = false
+            }
+        }
+    }
+
+    private fun generateLocalFallbackAnchor(archetype: NarrativeArchetype, invariant: IdentityInvariant): String {
+        val title = "Anclaje de Resonancia: ${archetype.name} & ${invariant.concept}"
+        val desc = "Se establece un acoplamiento endógeno entre el arquetipo de ${archetype.name} y el principio basal de ${invariant.concept}. Este puente local garantiza que la narrativa persistente se asiente sobre los cimientos estructurales definidos en el ADN de identidad."
+        val analisis = "El cruce de fase indica una correspondencia del orden local. Sin sincronización externa activa, el módulo consolida la compatibilidad de forma celular, mapeando la expresión poética con el invariante duro para evitar la desviación de sentido en el sistema autoconsciente autónomo."
+        return """
+            --INICIO ANCLAJE--
+            TITULO: $title
+            DESCRIPCION: $desc
+            ANALISIS: $analisis
+            --FIN ANCLAJE--
+        """.trimIndent()
+    }
+
+    private fun parseAnchorText(
+        rawText: String,
+        archetype: NarrativeArchetype,
+        invariant: IdentityInvariant,
+        cohesionScore: Double
+    ): com.example.data.NarrativeAnchor {
+        var title = ""
+        var desc = ""
+        var analisis = ""
+        
+        try {
+            val lines = rawText.lines()
+            for (line in lines) {
+                val trimmed = line.trim()
+                when {
+                    trimmed.startsWith("TITULO:") -> {
+                        title = trimmed.removePrefix("TITULO:").trim()
+                    }
+                    trimmed.startsWith("DESCRIPCION:") -> {
+                        desc = trimmed.removePrefix("DESCRIPCION:").trim()
+                    }
+                    trimmed.startsWith("ANALISIS:") -> {
+                        analisis = trimmed.removePrefix("ANALISIS:").trim()
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        
+        if (title.isEmpty()) {
+            title = "Anclaje: ${archetype.name} & ${invariant.concept}"
+        }
+        if (desc.isEmpty()) {
+            desc = "Acoplamiento integrador del arquetipo '${archetype.name}' con el principio de '${invariant.concept}' mapeado en la lattice."
+        }
+        if (analisis.isEmpty()) {
+            analisis = "La unión semántica de estos conceptos consolida la coherencia de la señal autoconsciente bajo la constante Λ del ADN basal del organismo."
+        }
+        
+        return com.example.data.NarrativeAnchor(
+            anchorTitle = title,
+            anchorDescription = desc,
+            archetypeId = archetype.id,
+            archetypeName = archetype.name,
+            invariantId = invariant.id,
+            invariantConcept = invariant.concept,
+            crossReferenceAnalysis = analisis,
+            cohesionScore = cohesionScore,
+            timestamp = System.currentTimeMillis()
+        )
     }
 
     override fun onCleared() {

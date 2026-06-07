@@ -12,9 +12,11 @@ import androidx.room.*
         NarrativeArchetype::class,
         RejectionRecord::class,
         IdentityInvariant::class,
-        CoherenceHistoryRecord::class
+        CoherenceHistoryRecord::class,
+        NeuralMemoryEntry::class,
+        NarrativeAnchor::class
     ],
-    version = 4,
+    version = 7,
     exportSchema = false
 )
 abstract class CognitiveDatabase : RoomDatabase() {
@@ -26,6 +28,8 @@ abstract class CognitiveDatabase : RoomDatabase() {
     abstract fun rejectionDao(): RejectionDao
     abstract fun identityDao(): IdentityDao
     abstract fun coherenceHistoryDao(): CoherenceHistoryDao
+    abstract fun neuralMemoryDao(): NeuralMemoryDao
+    abstract fun narrativeAnchorDao(): NarrativeAnchorDao
 
     companion object {
         @Volatile
