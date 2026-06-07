@@ -61,6 +61,8 @@ fun MythosScreen(viewModel: MythosViewModel) {
     val rawEvolLog by viewModel.internalRuleLogs.collectAsStateWithLifecycle()
     val autoSyncEnabled by viewModel.autoSyncEnabled.collectAsStateWithLifecycle()
     val researchModeEnabled by viewModel.researchModeEnabled.collectAsStateWithLifecycle()
+    val lastIdentityDrift by viewModel.lastIdentityDrift.collectAsStateWithLifecycle()
+    val lastDriftTargetConcept by viewModel.lastDriftTargetConcept.collectAsStateWithLifecycle()
 
     var textInput by remember { mutableStateOf("") }
     var activeTab by remember { mutableIntStateOf(0) } // 0: Narrative Log, 1: Episodic Logs, 2: Semantic Spaces
@@ -101,6 +103,19 @@ fun MythosScreen(viewModel: MythosViewModel) {
 
     val context = LocalContext.current
     val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
+
+    var dismissDriftAlert by remember { mutableStateOf(false) }
+
+    LaunchedEffect(lastIdentityDrift) {
+        if (lastIdentityDrift > 0.15) {
+            dismissDriftAlert = false
+            android.widget.Toast.makeText(
+                context,
+                "⚠️ POTENTIAL IDENTITY DRIFT DETECTED: Desviación con '$lastDriftTargetConcept' (Λ-Drift: ${"%.2f".format(lastIdentityDrift)})",
+                android.widget.Toast.LENGTH_LONG
+            ).show()
+        }
+    }
 
     val onCopyMarkdown = {
         val markdown = viewModel.generateMarkdownReport()
@@ -277,6 +292,120 @@ fun MythosScreen(viewModel: MythosViewModel) {
                     globalCoherence = globalCoherence,
                     logs = rawEvolLog
                 )
+
+                // Identity Drift Alert Banner
+                AnimatedVisibility(
+                    visible = lastIdentityDrift > 0.15 && !dismissDriftAlert,
+                    enter = expandVertically() + fadeIn(),
+                    exit = shrinkVertically() + fadeOut()
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 10.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color(0xFF3F1B1B).copy(alpha = 0.9f))
+                            .border(1.dp, Color(0xFFEF4444), RoundedCornerShape(8.dp))
+                            .padding(12.dp)
+                            .testTag("potential_drift_detected_banner")
+                    ) {
+                        Column {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Warning,
+                                        contentDescription = "Identity Drift Warning Icon",
+                                        tint = Color(0xFFF87171),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Text(
+                                        text = "POTENTIAL IDENTITY DRIFT DETECTED",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFFF87171),
+                                        letterSpacing = 1.sp
+                                    )
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .size(24.dp)
+                                        .clip(CircleShape)
+                                        .background(Color.White.copy(alpha = 0.1f))
+                                        .clickable { dismissDriftAlert = true },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Close,
+                                        contentDescription = "Dismiss Alerts",
+                                        tint = Color.White.copy(alpha = 0.7f),
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "⚠️ Desviación ontológica crítica detectada respecto al concepto rector '$lastDriftTargetConcept'.",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "La sintonía de coherencia Lambda global (Λglobal) se encuentra bajo presión debido al ruido atencional o contradicción epistémica de la información entrante.",
+                                fontSize = 9.sp,
+                                color = Color.White.copy(alpha = 0.7f),
+                                lineHeight = 12.sp
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = "Métrica de Desviación (Λ-Drift):",
+                                        fontSize = 8.5.sp,
+                                        color = Color.White.copy(alpha = 0.6f)
+                                    )
+                                    Text(
+                                        text = "${"%.2f".format(lastIdentityDrift)}",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFFF87171)
+                                    )
+                                }
+                                
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(Color(0xFFEF4444).copy(alpha = 0.2f))
+                                        .border(0.5.dp, Color(0xFFEF4444), RoundedCornerShape(4.dp))
+                                        .clickable {
+                                            viewModel.resetDriftState()
+                                            android.widget.Toast.makeText(context, "Sintonía re-acoplada con el Identity Core", android.widget.Toast.LENGTH_SHORT).show()
+                                        }
+                                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                                        .testTag("realign_identity_btn")
+                                ) {
+                                    Text(
+                                        text = "RE-ALINEAR CONSTANTE",
+                                        fontSize = 8.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFFF87171)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
             // Central Area - Scrollable with dynamic list inside Box to allow inputs to dock comfortably
@@ -2294,9 +2423,12 @@ fun AcademiaView(viewModel: MythosViewModel) {
 @Composable
 fun IdentityCoreView(viewModel: MythosViewModel) {
     val invariants by viewModel.identityInvariants.collectAsStateWithLifecycle()
+    val lastDrift by viewModel.lastIdentityDrift.collectAsStateWithLifecycle()
+    val driftTarget by viewModel.lastDriftTargetConcept.collectAsStateWithLifecycle()
+
     var conceptInput by remember { mutableStateOf("") }
     var valueInput by remember { mutableStateOf("") }
-    var selectedCategory by remember { mutableStateOf("principle") } // principle, framework, target
+    var selectedCategory by remember { mutableStateOf("principle") } // principle, framework, objective, constraint
 
     Column(
         modifier = Modifier
@@ -2328,6 +2460,95 @@ fun IdentityCoreView(viewModel: MythosViewModel) {
                     color = Color.White.copy(alpha = 0.5f),
                     lineHeight = 14.sp
                 )
+
+                HorizontalDivider(color = CardBorder.copy(alpha = 0.4f), thickness = 0.5.dp)
+
+                // Dynamic Identity Drift & Integrity Monitor widget
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (lastDrift > 0.15) Color(0xFF2D1616) else CardBackground.copy(alpha = 0.4f)
+                    ),
+                    border = BorderStroke(
+                        width = 1.dp,
+                        color = if (lastDrift > 0.15) Color(0xFFF87171).copy(alpha = 0.6f) else CyberTeal.copy(alpha = 0.2f)
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("identity_drift_monitor_card")
+                ) {
+                    Column(
+                        modifier = Modifier.padding(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(5.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "MONITOR DE DERIVA DE IDENTIDAD (ΛGLOBAL DRIFT)",
+                                fontSize = 8.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (lastDrift > 0.15) Color(0xFFF87171) else CyberTeal,
+                                letterSpacing = 0.5.sp
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(3.dp))
+                                    .background(
+                                        if (lastDrift > 0.15) Color(0xFFF87171).copy(alpha = 0.15f)
+                                        else CyberTeal.copy(alpha = 0.15f)
+                                    )
+                                    .border(
+                                        0.5.dp,
+                                        if (lastDrift > 0.15) Color(0xFFF87171) else CyberTeal,
+                                        RoundedCornerShape(3.dp)
+                                    )
+                                    .padding(horizontal = 4.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = if (lastDrift > 0.15) "⚠️ DERIVA DETECTADA" else "✓ ADN COHERENTE",
+                                    fontSize = 7.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (lastDrift > 0.15) Color(0xFFF87171) else CyberTeal
+                                )
+                            }
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Distancia de Inconsistencia (Λ-Drift Metric):",
+                                fontSize = 9.sp,
+                                color = Color.White.copy(alpha = 0.6f)
+                            )
+                            Text(
+                                text = "${"%.2f".format(lastDrift)}",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (lastDrift > 0.15) Color(0xFFF87171) else CyberTeal
+                            )
+                        }
+
+                        if (lastDrift > 0.15) {
+                            Text(
+                                text = "Vulneración atencional detectada con el concepto rector '$driftTarget'. La incoherencia de fase con el Identity Core está presionando la homeostasis sistémica.",
+                                fontSize = 8.5.sp,
+                                color = Color(0xFFF87171).copy(alpha = 0.9f),
+                                lineHeight = 11.sp
+                            )
+                        } else {
+                            Text(
+                                text = "Último acoplamiento de ADN: '$driftTarget' (Sin desviación ontológica detectable).",
+                                fontSize = 8.sp,
+                                color = Color.White.copy(alpha = 0.4f)
+                            )
+                        }
+                    }
+                }
 
                 HorizontalDivider(color = CardBorder.copy(alpha = 0.4f), thickness = 0.5.dp)
 
@@ -2368,9 +2589,14 @@ fun IdentityCoreView(viewModel: MythosViewModel) {
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    listOf("principle" to "PRINCIPIO", "framework" to "MARCO S.A.F.", "target" to "OBJETIVO").forEach { (cat, label) ->
+                    listOf(
+                        "principle" to "PRINCIPIO",
+                        "framework" to "MARCO S.A.F.",
+                        "objective" to "OBJETIVO",
+                        "constraint" to "RESTRICCIÓN"
+                    ).forEach { (cat, label) ->
                         val isSel = selectedCategory == cat
                         Box(
                             modifier = Modifier
@@ -2382,7 +2608,12 @@ fun IdentityCoreView(viewModel: MythosViewModel) {
                                 .padding(vertical = 8.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(text = label, fontSize = 9.sp, fontWeight = FontWeight.Bold, color = if (isSel) CyberTeal else Color.White.copy(alpha = 0.5f))
+                            Text(
+                                text = label,
+                                fontSize = 7.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isSel) CyberTeal else Color.White.copy(alpha = 0.5f)
+                            )
                         }
                     }
                 }
@@ -2437,6 +2668,8 @@ fun IdentityCoreView(viewModel: MythosViewModel) {
                         val badgeColor = when (invariant.category) {
                             "principle" -> CyberTeal
                             "framework" -> CyberPurple
+                            "objective" -> CyberCyan
+                            "constraint" -> Color(0xFFF87171)
                             else -> CyberCyan
                         }
                         Box(

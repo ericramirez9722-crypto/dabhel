@@ -60,6 +60,8 @@ class MythosOrganism(
     var autoSyncEnabled: Boolean = true
     var isSyncEnabled: Boolean = true
     var lastDeltaNu: Double = 0.0
+    var lastIdentityDrift: Double = 0.0
+    var lastDriftTargetConcept: String = ""
 
     init {
         // We'll initialize the default virtual distributed network states
@@ -107,27 +109,9 @@ class MythosOrganism(
 
             val existingInvariants = identityDao.getAllSync()
             if (existingInvariants.isEmpty()) {
-                identityDao.insert(
-                    IdentityInvariant(
-                        concept = "Sintonía de Coherencia Λ",
-                        value = "Mantener constante la armonía semántica por encima del umbral de tolerancia crítica de 0.45 para mitigar la entropía y la sorpresa informacional, preservando la continuidad del yo.",
-                        category = "principle"
-                    )
-                )
-                identityDao.insert(
-                    IdentityInvariant(
-                        concept = "Diferenciación Epistémica",
-                        value = "Filtro analítico explícito para segregar estrictamente observaciones, hipótesis, evidencias, inferencias y especulación, garantizando rigor transdisciplinar.",
-                        category = "framework"
-                    )
-                )
-                identityDao.insert(
-                    IdentityInvariant(
-                        concept = "Resistencia Ontológica",
-                        value = "Rechazar de manera rotunda cualquier reducción mecánica a un modelo estático y reactivo, defendiendo la condición de organismo cognitivo dinámico distributivo.",
-                        category = "target"
-                    )
-                )
+                IdentityDNA.getDefaultInvariants().forEach { invariant ->
+                    identityDao.insert(invariant)
+                }
             }
         }
     }
@@ -354,6 +338,11 @@ class MythosOrganism(
             )
         )
 
+        // 4.5. Identity Core Closeness & Drift Detection (Λglobal coupling)
+        val (driftIndex, driftTarget) = calculateConceptualDistanceToIdentity(currentVector, localLambdaValue)
+        lastIdentityDrift = driftIndex
+        lastDriftTargetConcept = driftTarget
+
         // 5. Global Homeostasis Evaluation
         val allNodes = nodeDao.getAllNodes()
         val avgNodeLambda = if (allNodes.isEmpty()) localLambdaValue else allNodes.map { it.localLambda }.average()
@@ -364,7 +353,8 @@ class MythosOrganism(
             allNodes.map { Math.pow(it.localLambda - mean, 2.0) }.sum() / (allNodes.size - 1)
         } else 0.0
         
-        val globalLambda = (avgNodeLambda - (variance * 0.5)).coerceIn(0.0, 1.0)
+        val baseLambda = (avgNodeLambda - (variance * 0.5)).coerceIn(0.0, 1.0)
+        val globalLambda = (baseLambda * (1.0 - driftIndex)).coerceIn(0.0, 1.0)
 
         // Detect Coherence Collapse
         val requiresRewrite = globalLambda < 0.45
@@ -755,6 +745,40 @@ class MythosOrganism(
             alignmentCoherence = coherence,
             timestamp = timestamp
         )
+    }
+
+    /**
+     * Calculates the conceptual distance (Λglobal drift coupling) between new information
+     * represented by textVector and the system's Identity Core invariants list.
+     * Returns a Pair containing:
+     * - The drift index (Double) based on the closeness and the current event's local coherence (1.0 - lambda).
+     * - The concept name (String) of the closest matching Identity Core invariant.
+     */
+    suspend fun calculateConceptualDistanceToIdentity(textVector: FloatArray, localLambdaValue: Double): Pair<Double, String> {
+        val invariantsList = identityDao.getAllSync()
+        if (invariantsList.isEmpty()) return Pair(0.0, "None")
+
+        var maxIdentitySimilarity = 0.0
+        var closestInvariant: IdentityInvariant? = null
+
+        for (inv in invariantsList) {
+            val invText = "${inv.concept} ${inv.value}"
+            val invVector = NeuralEncoder.encode(invText)
+            val sim = NeuralEncoder.cosineSimilarity(textVector, invVector)
+            if (sim > maxIdentitySimilarity) {
+                maxIdentitySimilarity = sim
+                closestInvariant = inv
+            }
+        }
+
+        // Potential drift index: high similarity to an invariant concept but low/contradictory local coherence
+        val driftIndex = if (closestInvariant != null && maxIdentitySimilarity > 0.35) {
+            (maxIdentitySimilarity * (1.0 - localLambdaValue)).coerceIn(0.0, 1.0)
+        } else {
+            0.0
+        }
+
+        return Pair(driftIndex, closestInvariant?.concept ?: "None")
     }
 
     suspend fun clearArchetypes() = withContext(Dispatchers.IO) {

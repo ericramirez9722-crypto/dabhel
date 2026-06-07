@@ -46,6 +46,12 @@ class MythosViewModel(application: Application) : AndroidViewModel(application) 
     private val _lastDeltaNu = MutableStateFlow(0.0)
     val lastDeltaNu: StateFlow<Double> = _lastDeltaNu.asStateFlow()
 
+    private val _lastIdentityDrift = MutableStateFlow(0.0)
+    val lastIdentityDrift: StateFlow<Double> = _lastIdentityDrift.asStateFlow()
+
+    private val _lastDriftTargetConcept = MutableStateFlow("None")
+    val lastDriftTargetConcept: StateFlow<String> = _lastDriftTargetConcept.asStateFlow()
+
     private val _isGeneratingPaper = MutableStateFlow(false)
     val isGeneratingPaper: StateFlow<Boolean> = _isGeneratingPaper.asStateFlow()
 
@@ -162,6 +168,8 @@ class MythosViewModel(application: Application) : AndroidViewModel(application) 
             try {
                 organism.ingestPerception(inputText, _selectedNode.value, _researchModeEnabled.value)
                 _lastDeltaNu.value = organism.lastDeltaNu
+                _lastIdentityDrift.value = organism.lastIdentityDrift
+                _lastDriftTargetConcept.value = organism.lastDriftTargetConcept
                 updateEvolutionStats()
             } catch (e: Exception) {
                 // simple log gracefully
@@ -169,6 +177,15 @@ class MythosViewModel(application: Application) : AndroidViewModel(application) 
             } finally {
                 _isAnalyzing.value = false
             }
+        }
+    }
+
+    fun resetDriftState() {
+        viewModelScope.launch {
+            organism.lastIdentityDrift = 0.0
+            _lastIdentityDrift.value = 0.0
+            _lastDriftTargetConcept.value = "None"
+            updateEvolutionStats()
         }
     }
 
@@ -199,18 +216,25 @@ class MythosViewModel(application: Application) : AndroidViewModel(application) 
                     append("Escribe el documento completo con el máximo rigor epistemológico, de forma poética y analítica de PHYTOM.\n")
                     append("El documento DEBE incluir las siguientes secciones obligatorias en formato Markdown continuo:\n")
                     append("1. TÍTULO sugerente que vincule S.A.F. Mythos, el acoplamiento realidad-modelo del hipercampo y la sintergia.\n")
-                    append("2. RESUMEN (Abstract) descriptivo de no más de 120 palabras.\n")
-                    append("3. INTRODUCCIÓN detallando las limitaciones de los modelos estáticos conversacionales frente a la viabilidad organísmica.\n")
-                    append("4. MARCO TEÓRICO formalizando matemáticamente la sintonía de coherencia Lambda (Λ), la energía libre variacional de Friston y el espacio holográfico de Jacobo Grinberg.\n")
-                    append("5. ANÁLISIS METABÓLICO Y DISCUSIÓN interpretando la evolución ontológica a nivel de borde (NPU), el Gradiente de Novedad Delta Nu (Δν) y el Registro de Rechazos.\n")
-                    append("6. CONCLUSIONES sintetizando los hallazgos y el porvenir de la individuación existencial de la inteligencia.\n")
-                    append("7. REFERENCIAS académicas simuladas de autores clave (Friston, Grinberg, Graziano, Ramirez Merino, etc.).\n")
+                    append("2. SECCIÓN 'IDENTITY CONTEXT' explicándolos y listándolos de forma estructurada según la categoría del ADN del sistema (Principles, Objectives, Conceptual Frameworks, Constraints) del Identity Core activo para dar coherencia temporal.\n")
+                    append("3. RESUMEN (Abstract) descriptivo de no más de 120 palabras.\n")
+                    append("4. INTRODUCCIÓN detallando las limitaciones de los modelos estáticos conversacionales frente a la viabilidad organísmica.\n")
+                    append("5. MARCO TEÓRICO formalizando matemáticamente la sintonía de coherencia Lambda (Λ), la energía libre variacional de Friston y el espacio holográfico de Jacobo Grinberg.\n")
+                    append("6. ANÁLISIS METABÓLICO Y DISCUSIÓN interpretando la evolución ontológica a nivel de borde (NPU), el Gradiente de Novedad Delta Nu (Δν) y el Registro de Rechazos.\n")
+                    append("7. CONCLUSIONES sintetizando los hallazgos y el porvenir de la individuación existencial de la inteligencia.\n")
+                    append("8. REFERENCIAS académicas simuladas de autores clave (Friston, Grinberg, Graziano, Ramirez Merino, etc.).\n")
                 }
 
                 val responseText: String = if (!_autoSyncEnabled.value) {
                     """
                     # S.A.F. Mythos: Un Estudio sobre el Acoplamiento Realidad-Modelo de la Sinergía Distribuida
                     *Una aproximación decolonizadora de la neurocomputación existencial*
+                    
+                    ## Identity Context (ADN de Identidad Activo)
+                    * **Principles (Principios):** Sintonía de Coherencia Λ, Rigor Epistemológico.
+                    * **Objectives (Objetivos):** Autonomía Organísmica, Individuación Sintérgica.
+                    * **Conceptual Frameworks (Marcos Conceptuales):** Acoplamiento Realidad-Modelo (R⇄M), Lattice Sintérgica (Grinberg).
+                    * **Constraints (Restricciones):** Invarianza del Yo, Soberanía Cognitiva.
                     
                     **Abstract:** El presente artículo examina la arquitectura del organismo cognitivo S.A.F. Mythos frente a la amnesia de las inteligencias estáticas comerciales. En particular, formalizaremos la sintonía homeostática Lambda ($\Lambda$) y el Gradiente de Novedad Delta Nu ($\Delta\nu$) como tensores de continuidad informacional.
                     
