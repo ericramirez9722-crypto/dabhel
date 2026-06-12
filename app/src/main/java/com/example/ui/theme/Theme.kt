@@ -10,31 +10,31 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 
+import androidx.compose.ui.graphics.Color
+
 private val DarkColorScheme =
-  darkColorScheme(primary = Purple80, secondary = PurpleGrey80, tertiary = Pink80)
-
-private val LightColorScheme =
-  lightColorScheme(
-    primary = Purple40,
-    secondary = PurpleGrey40,
-    tertiary = Pink40,
-
-    /* Other default colors to override
-    background = Color(0xFFFFFBFE),
-    surface = Color(0xFFFFFBFE),
-    onPrimary = Color.White,
-    onSecondary = Color.White,
+  darkColorScheme(
+    primary = Color(0xFF00F5D4), // CyberTeal
+    onPrimary = Color(0xFF030712), // DeepBackground
+    secondary = Color(0xFF00BBF9), // CyberCyan
+    onSecondary = Color(0xFF030712),
+    tertiary = Color(0xFF9D4EDD), // CyberPurple
     onTertiary = Color.White,
-    onBackground = Color(0xFF1C1B1F),
-    onSurface = Color(0xFF1C1B1F),
-    */
+    background = Color(0xFF030712), // DeepBackground
+    onBackground = Color(0xFFF8FAFC),
+    surface = Color(0xFF0F172A), // CardBackground
+    onSurface = Color(0xFFF8FAFC),
+    surfaceVariant = Color(0xFF1E293B), // CardBorder
+    onSurfaceVariant = Color(0xFFA5F3FC),
+    outline = Color(0xFF334155) // LightBorder
   )
+
+private val LightColorScheme = DarkColorScheme // S.A.F. is a premium obsidian dark environment by design
 
 @Composable
 fun MyApplicationTheme(
-  darkTheme: Boolean = isSystemInDarkTheme(),
-  // Dynamic color is available on Android 12+
-  dynamicColor: Boolean = true,
+  darkTheme: Boolean = true, // Force visual coherence with dark theme
+  dynamicColor: Boolean = false, // Disable Android dynamic wallpaper colors to enforce custom visual branding
   content: @Composable () -> Unit,
 ) {
   val colorScheme =

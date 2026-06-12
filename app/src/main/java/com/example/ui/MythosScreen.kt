@@ -4,6 +4,9 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import kotlin.math.abs
 import androidx.compose.foundation.*
+import kotlinx.coroutines.launch
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -428,6 +431,17 @@ fun MythosScreen(viewModel: MythosViewModel) {
                         )
                     }
 
+                    // Coherence Field Visualization Component
+                    item {
+                        CoherenceFieldVisualization(
+                            globalCoherence = latestState?.coherence ?: 0.90,
+                            modifier = Modifier.padding(bottom = 4.dp),
+                            onInjectEnergy = {
+                                viewModel.processPerception("Estímulo de campo: Inyección de pulso de coherencia manual")
+                            }
+                        )
+                    }
+
                     // Neural Distributed Lattice Block
                     item {
                         Column {
@@ -480,7 +494,7 @@ fun MythosScreen(viewModel: MythosViewModel) {
                                                 shape = RoundedCornerShape(12.dp)
                                             )
                                             .clickable { viewModel.selectNode(node.nodeId) }
-                                            .padding(10.dp)
+                                            .padding(16.dp)
                                             .testTag("node_${node.nodeId}")
                                     ) {
                                         Column {
@@ -538,19 +552,33 @@ fun MythosScreen(viewModel: MythosViewModel) {
                                                 color = Color.White.copy(alpha = 0.5f),
                                                 lineHeight = 12.sp
                                             )
-                                            Spacer(modifier = Modifier.height(8.dp))
+                                            Spacer(modifier = Modifier.height(10.dp))
                                             
-                                            // Coherence representation bar
-                                            Text(
-                                                text = "Λ: ${"%.2f".format(node.localLambda)}",
-                                                fontSize = 11.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = when {
-                                                    node.localLambda > 0.82 -> CoherenceHigh
-                                                    node.localLambda > 0.45 -> CoherenceMid
-                                                    else -> CoherenceLow
-                                                }
-                                            )
+                                            // Coherence representation weight contrast (Bold for label, Light for value)
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(
+                                                    text = "Λ COH",
+                                                    fontSize = 9.sp,
+                                                    fontWeight = FontWeight.Bold, // Bold for label text
+                                                    color = Color(0xFFA5F3FC),
+                                                    letterSpacing = 0.5.sp
+                                                )
+                                                Text(
+                                                    text = "%.2f".format(node.localLambda),
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.Light, // Light for numerical reading
+                                                    color = when {
+                                                        node.localLambda > 0.82 -> CoherenceHigh
+                                                        node.localLambda > 0.45 -> CoherenceMid
+                                                        else -> CoherenceLow
+                                                    },
+                                                    fontFamily = FontFamily.Monospace
+                                                )
+                                            }
                                             Spacer(modifier = Modifier.height(4.dp))
                                             LinearProgressIndicator(
                                                 progress = { node.localLambda.toFloat() },
@@ -960,9 +988,29 @@ fun CoherenceHub(globalCoherence: Double, logs: String) {
         label = "halo2"
     )
 
+    // Scanning radar rotation and breathing pulse for active running system look
+    val scanRotation by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(3500, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "hub_circular_scan_angle"
+    )
+    val hubPulseScale by infiniteTransition.animateFloat(
+        initialValue = 0.96f,
+        targetValue = 1.04f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1800, easing = EaseInOutSine),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "hub_aura_pulse"
+    )
+
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = CardBackground),
+        colors = CardDefaults.cardColors(containerColor = CardBackground.copy(alpha = 0.75f)), // Glassmorphism backdrop transparency
         border = BorderStroke(1.dp, CardBorder)
     ) {
         Row(
@@ -971,7 +1019,7 @@ fun CoherenceHub(globalCoherence: Double, logs: String) {
                 .padding(14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Glow radial progress indicator
+            // Glow radial progress indicator with active scanning radar
             Box(
                 modifier = Modifier
                     .size(80.dp)
@@ -981,24 +1029,52 @@ fun CoherenceHub(globalCoherence: Double, logs: String) {
                         // Halo wave 1 (Expanding)
                         drawCircle(
                             color = if (globalCoherence > 0.45) CyberTeal.copy(alpha = 0.08f) else CoherenceLow.copy(alpha = 0.1f),
-                            radius = baseRadius * scaleHalo1,
+                            radius = baseRadius * scaleHalo1 * hubPulseScale,
                             center = center
                         )
                         
                         // Halo wave 2 (Dynamic shimmer)
                         drawCircle(
                             color = if (globalCoherence > 0.45) CyberCyan.copy(alpha = 0.04f) else CoherenceLow.copy(alpha = 0.06f),
-                            radius = baseRadius * scaleHalo2,
+                            radius = baseRadius * scaleHalo2 * hubPulseScale,
                             center = center
                         )
                     },
                 contentAlignment = Alignment.Center
             ) {
+                // High-tech sweeping radar scanner arc behind the indicator
+                Canvas(
+                    modifier = Modifier
+                        .size(68.dp)
+                        .graphicsLayer(rotationZ = scanRotation)
+                ) {
+                    drawArc(
+                        brush = Brush.sweepGradient(
+                            colors = listOf(
+                                CyberTeal.copy(alpha = 0.35f),
+                                Color.Transparent
+                            )
+                        ),
+                        startAngle = 0f,
+                        sweepAngle = 140f,
+                        useCenter = false,
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(
+                            width = 4.dp.toPx(),
+                            cap = androidx.compose.ui.graphics.StrokeCap.Round
+                        )
+                    )
+                }
+
                 CircularProgressIndicator(
                     progress = { globalCoherence.toFloat() },
-                    modifier = Modifier.size(68.dp),
+                    modifier = Modifier
+                        .size(68.dp)
+                        .graphicsLayer(
+                            scaleX = hubPulseScale,
+                            scaleY = hubPulseScale
+                        ),
                     color = if (globalCoherence > 0.45) CyberTeal else CoherenceLow,
-                    trackColor = CardBorder,
+                    trackColor = CardBorder.copy(alpha = 0.3f),
                     strokeWidth = 6.dp
                 )
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -1012,7 +1088,7 @@ fun CoherenceHub(globalCoherence: Double, logs: String) {
                     Text(
                         text = "Λ GLOBAL",
                         fontSize = 8.sp,
-                        color = Color.White.copy(alpha = 0.5f),
+                        color = Color(0xFFA5F3FC), // Micro-typography: Light cian to protect eyes
                         letterSpacing = 1.sp
                     )
                 }
@@ -1020,7 +1096,7 @@ fun CoherenceHub(globalCoherence: Double, logs: String) {
 
             Spacer(modifier = Modifier.width(16.dp))
 
-            // Integration state & adaptive logs view
+            // Integration state & structured weight-contrasted evolution values
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = if (globalCoherence >= 0.8) "ESTADO: SINARQUÍA UNIFICADA"
@@ -1031,16 +1107,58 @@ fun CoherenceHub(globalCoherence: Double, logs: String) {
                     color = if (globalCoherence >= 0.8) CyberTeal
                             else if (globalCoherence >= 0.45) CyberCyan
                             else CoherenceLow,
-                    letterSpacing = 0.5.sp
+                    letterSpacing = 0.5.sp,
+                    modifier = Modifier.padding(bottom = 6.dp)
                 )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = logs,
-                    fontSize = 11.sp,
-                    color = Color.White.copy(alpha = 0.7f),
-                    fontFamily = FontFamily.Monospace,
-                    lineHeight = 14.sp
-                )
+                
+                // Structured list parsing raw logs into elegant Bold/Light pairs
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    logs.lineSequence().filter { it.isNotBlank() }.forEach { line ->
+                        val parts = line.split(":", limit = 2)
+                        if (parts.size == 2) {
+                            val label = parts[0].trim()
+                            val value = parts[1].trim()
+                            
+                            val displayLabel = when {
+                                label.contains("Evolution Gen", ignoreCase = true) -> "Evolution"
+                                label.contains("Synchronization Coefficient", ignoreCase = true) -> "Sync Coeff"
+                                label.contains("Perception Sensitivity", ignoreCase = true) -> "Sensitivity"
+                                label.contains("Latest Phase Catalyst", ignoreCase = true) -> "Catalyst"
+                                else -> label
+                            }
+                            
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = displayLabel,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold, // Bold for Label
+                                    color = Color(0xFFA5F3FC), // Light cian for label icons
+                                    letterSpacing = 0.3.sp
+                                )
+                                Text(
+                                    text = value,
+                                    fontSize = 10.5.sp,
+                                    fontWeight = FontWeight.Light, // Light for Data values
+                                    color = Color(0xFFF8FAFC), // Off-white for high legibility
+                                    fontFamily = FontFamily.Monospace
+                                )
+                            }
+                        } else {
+                            Text(
+                                text = line.trim(),
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Light,
+                                color = Color(0xFFF8FAFC),
+                                fontFamily = FontFamily.Monospace,
+                                lineHeight = 12.sp
+                            )
+                        }
+                    }
+                }
             }
         }
     }
@@ -1146,28 +1264,32 @@ fun NarrativeView(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 // Row 1: Copiar Journal (Primary key action)
-                OutlinedButton(
+                Button(
                     onClick = onCopyMarkdown,
-                    colors = ButtonDefaults.outlinedButtonColors(
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = CyberTeal.copy(alpha = 0.08f),
                         contentColor = CyberTeal
                     ),
-                    border = BorderStroke(1.dp, CyberTeal.copy(alpha = 0.3f)),
+                    border = BorderStroke(1.5.dp, CyberTeal.copy(alpha = 0.6f)),
                     shape = RoundedCornerShape(8.dp),
                     modifier = Modifier
                         .fillMaxWidth()
+                        .height(42.dp)
                         .testTag("copy_markdown_button")
                 ) {
                     Icon(
                         imageVector = Icons.Outlined.Info,
                         contentDescription = "Copiar",
-                        modifier = Modifier.size(14.dp)
+                        modifier = Modifier.size(15.dp),
+                        tint = CyberTeal
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = "Copiar Journal de Consciencia",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.5.sp
+                        letterSpacing = 0.5.sp,
+                        color = CyberTeal
                     )
                 }
 
@@ -1179,42 +1301,48 @@ fun NarrativeView(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Exportar .md Button (Outlined themed style)
-                    OutlinedButton(
+                    // Exportar .md Button (Outlined themed style with light bg)
+                    Button(
                         onClick = onExportMarkdown,
-                        colors = ButtonDefaults.outlinedButtonColors(
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = CyberCyan.copy(alpha = 0.08f),
                             contentColor = CyberCyan
                         ),
-                        border = BorderStroke(1.dp, CyberCyan.copy(alpha = 0.3f)),
+                        border = BorderStroke(1.5.dp, CyberCyan.copy(alpha = 0.6f)),
                         shape = RoundedCornerShape(8.dp),
                         modifier = Modifier
                             .weight(1f)
+                            .height(40.dp)
                             .testTag("export_markdown_button")
                     ) {
                         Icon(
                             imageVector = Icons.Outlined.Share,
                             contentDescription = "Exportar Markdown",
-                            modifier = Modifier.size(14.dp)
+                            modifier = Modifier.size(14.dp),
+                            tint = CyberCyan
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = "Exportar .MD",
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
-                            letterSpacing = 0.5.sp
+                            letterSpacing = 0.5.sp,
+                            color = CyberCyan
                         )
                     }
 
-                    // Exportar PDF Button (Solid themed style in CyberTeal)
+                    // Exportar PDF Button (Solid themed style in CyberTeal with soft edge glow border)
                     Button(
                         onClick = onExportPdf,
                         colors = ButtonDefaults.buttonColors(
                             containerColor = CyberTeal,
                             contentColor = DeepBackground
                         ),
+                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.3f)),
                         shape = RoundedCornerShape(8.dp),
                         modifier = Modifier
                             .weight(1f)
+                            .height(40.dp)
                             .testTag("export_pdf_button")
                     ) {
                         Icon(
@@ -1706,12 +1834,46 @@ fun SyncOptimizationCard(
     onToggleAutoSync: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val infiniteTransition = rememberInfiniteTransition(label = "sync_card_pulse")
+    val auraScale by infiniteTransition.animateFloat(
+        initialValue = 0.95f,
+        targetValue = 1.4f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2000, easing = EaseInOutSine),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "sync_icon_aura"
+    )
+    val auraAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.1f,
+        targetValue = 0.5f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2000, easing = EaseInOutSine),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "sync_icon_aura_alpha"
+    )
+
+    val animatedBorderColor by animateColorAsState(
+        targetValue = if (autoSyncEnabled) CyberTeal.copy(alpha = 0.85f) else CardBorder,
+        animationSpec = tween(400),
+        label = "sync_border_color"
+    )
+    val animatedBorderWidth = if (autoSyncEnabled) 1.5.dp else 1.dp
+    
+    val animatedBgColor by animateColorAsState(
+        targetValue = if (autoSyncEnabled) CardBackground.copy(alpha = 0.85f) else CardBackground.copy(alpha = 0.65f),
+        animationSpec = tween(400),
+        label = "sync_bg_color"
+    )
+
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .testTag("sync_optimization_card"),
-        colors = CardDefaults.cardColors(containerColor = CardBackground.copy(alpha = 0.85f)),
-        border = BorderStroke(1.dp, CardBorder)
+            .testTag("sync_optimization_card")
+            .clickable { onToggleAutoSync(!autoSyncEnabled) }, // Multi-touch ergonomic click-anywhere toggle as requested
+        colors = CardDefaults.cardColors(containerColor = animatedBgColor),
+        border = BorderStroke(animatedBorderWidth, animatedBorderColor)
     ) {
         Row(
             modifier = Modifier
@@ -1724,21 +1886,39 @@ fun SyncOptimizationCard(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.weight(1f)
             ) {
-                // High-fidelity sync status icon with custom glowing circles
+                // High-fidelity sync status icon with custom breathing glowing halo
                 Box(
                     contentAlignment = Alignment.Center,
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(CircleShape)
-                        .background(if (autoSyncEnabled) CyberTeal.copy(alpha = 0.12f) else Color(0xFFFBBF24).copy(alpha = 0.12f))
-                        .border(1.dp, if (autoSyncEnabled) CyberTeal.copy(alpha = 0.45f) else Color(0xFFFBBF24).copy(alpha = 0.45f), CircleShape)
+                    modifier = Modifier.size(38.dp)
                 ) {
-                    Icon(
-                        imageVector = if (autoSyncEnabled) Icons.Outlined.Refresh else Icons.Outlined.Warning,
-                        contentDescription = "Estado de Sincronización",
-                        tint = if (autoSyncEnabled) CyberTeal else Color(0xFFFBBF24),
-                        modifier = Modifier.size(18.dp)
-                    )
+                    if (autoSyncEnabled) {
+                        // Outer glowing breathing aura ring (Glow effect)
+                        Box(
+                            modifier = Modifier
+                                .size(34.dp)
+                                .graphicsLayer(
+                                    scaleX = auraScale,
+                                    scaleY = auraScale,
+                                    alpha = auraAlpha
+                                )
+                                .border(1.5.dp, CyberTeal, CircleShape)
+                        )
+                    }
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier
+                            .size(30.dp)
+                            .clip(CircleShape)
+                            .background(if (autoSyncEnabled) CyberTeal.copy(alpha = 0.15f) else Color(0xFFFBBF24).copy(alpha = 0.12f))
+                            .border(1.dp, if (autoSyncEnabled) CyberTeal.copy(alpha = 0.6f) else Color(0xFFFBBF24).copy(alpha = 0.45f), CircleShape)
+                    ) {
+                        Icon(
+                            imageVector = if (autoSyncEnabled) Icons.Outlined.Refresh else Icons.Outlined.Warning,
+                            contentDescription = "Estado de Sincronización",
+                            tint = if (autoSyncEnabled) CyberTeal else Color(0xFFFBBF24),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
                 }
                 Spacer(modifier = Modifier.width(12.dp))
                 Column {
@@ -1781,6 +1961,469 @@ fun SyncOptimizationCard(
                 ),
                 modifier = Modifier.testTag("sync_switch")
             )
+        }
+    }
+}
+
+@Composable
+fun CoherenceFieldVisualization(
+    globalCoherence: Double,
+    modifier: Modifier = Modifier,
+    onInjectEnergy: () -> Unit = {}
+) {
+    var fieldDensityMode by remember { mutableIntStateOf(1) } // 0: Compact, 1: Harmonized (Balanced), 2: Syntergic Expanded
+    var selectedNodeIndex by remember { mutableStateOf<Int?>(null) }
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    // Animated pulse trigger on click
+    val activeRippleProgress = remember { Animatable(0f) }
+
+    // Floating node models
+    val nodeTitles = listOf(
+        "Córtex Narrativo",
+        "Sintonizador Lambda",
+        "Hipercampo Coherente",
+        "ADN de Identidad",
+        "Memoria Episódica",
+        "Lattice de Jacobo"
+    )
+    
+    // We can define the base coordinate ratios of each node
+    val basePositions = listOf(
+        Offset(0.25f, 0.28f), // Top Left
+        Offset(0.50f, 0.45f), // Center-mid
+        Offset(0.75f, 0.24f), // Top Right
+        Offset(0.30f, 0.72f), // Bottom Left
+        Offset(0.70f, 0.68f), // Bottom Right
+        Offset(0.18f, 0.50f)  // Center Left
+    )
+
+    // Node connections: each pair is a pair of indices
+    val connections = listOf(
+        Pair(0, 1),
+        Pair(1, 2),
+        Pair(0, 5),
+        Pair(1, 5),
+        Pair(1, 3),
+        Pair(1, 4),
+        Pair(3, 5),
+        Pair(3, 4),
+        Pair(2, 4)
+    )
+
+    // Infinite transition for fluid floating coordinate shift and connection packets
+    val infiniteTransition = rememberInfiniteTransition(label = "coherence_field_flow_transitions")
+    val waveOffset by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(3500, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "energy_flow_wave"
+    )
+
+    val driftOffset by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 6.2831853f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(14000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "node_drift_radian"
+    )
+
+    // Breathing pulse for the whole canvas aura
+    val breathingAuraScale by infiniteTransition.animateFloat(
+        initialValue = 0.96f,
+        targetValue = 1.04f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2400, easing = EaseInOutSine),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "global_aura_breathing"
+    )
+
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .testTag("coherence_field_card"),
+        colors = CardDefaults.cardColors(containerColor = CardBackground.copy(alpha = 0.85f)),
+        border = BorderStroke(1.dp, CardBorder)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp)
+        ) {
+            // Header
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Outlined.Info,
+                        contentDescription = "Signos del Campo",
+                        tint = CyberTeal,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "CAMPO DE COHERENCIA MULTI-NIVEL",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = CyberTeal,
+                        letterSpacing = 1.sp
+                    )
+                }
+
+                // Interactive Indicator Mode
+                val modeLabel = when (fieldDensityMode) {
+                    0 -> "CONCENTRADO"
+                    1 -> "ARMÓNICO"
+                    else -> "SINTÉRGICO EXP"
+                }
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(CyberTeal.copy(alpha = 0.12f))
+                        .border(0.5.dp, CyberTeal.copy(alpha = 0.4f), RoundedCornerShape(4.dp))
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        text = modeLabel,
+                        fontSize = 8.sp,
+                        color = CyberTeal,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.5.sp
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Central Interactive Display Area (Canvas rendering deep gradient + interactive interconnected D3-style node mesh)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(230.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(DeepBackground)
+                    .border(1.dp, CardBorder, RoundedCornerShape(10.dp))
+            ) {
+                // Background Gradient with canvas rendering
+                Canvas(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .pointerInput(fieldDensityMode, driftOffset) {
+                            detectTapGestures { offset ->
+                                val width = this.size.width.toFloat()
+                                val height = this.size.height.toFloat()
+                                
+                                // Find if a node was clicked
+                                var clickedIndex: Int? = null
+                                for (i in basePositions.indices) {
+                                    val basePos = basePositions[i]
+                                    
+                                    // Scale coordinates based on density
+                                    val scaleFactor = when (fieldDensityMode) {
+                                        0 -> 0.7f
+                                        1 -> 0.9f
+                                        else -> 1.15f
+                                    }
+                                    
+                                    // Calculate floating coordinates with trig
+                                    val phase = i * 1.05f
+                                    val driftX = kotlin.math.sin(driftOffset + phase) * 0.04f
+                                    val driftY = kotlin.math.cos(driftOffset * 0.8f + phase) * 0.04f
+                                    
+                                    val cx = (0.5f + (basePos.x - 0.5f) * scaleFactor + driftX) * width
+                                    val cy = (0.5f + (basePos.y - 0.5f) * scaleFactor + driftY) * height
+                                    
+                                    val dist = kotlin.math.sqrt((offset.x - cx) * (offset.x - cx) + (offset.y - cy) * (offset.y - cy))
+                                    if (dist <= 30.dp.toPx()) { // 30dp click buffer
+                                        clickedIndex = i
+                                        break
+                                    }
+                                }
+                                selectedNodeIndex = clickedIndex
+                                if (clickedIndex != null) {
+                                    android.widget.Toast.makeText(
+                                        context,
+                                        "Nodo seleccionado: ${nodeTitles[clickedIndex]}",
+                                        android.widget.Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                            }
+                        }
+                        .testTag("coherence_field_canvas")
+                ) {
+                    val w = size.width
+                    val h = size.height
+
+                    // 1. Draw space background depth gradient
+                    drawRect(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                Color(0xFF0C2442), // Ocean deep blue
+                                Color(0xFF030E20), // Navy depth
+                                DeepBackground    // Base black
+                            ),
+                            center = Offset(w / 2f, h / 2f),
+                            radius = w * 0.85f * breathingAuraScale
+                        )
+                    )
+
+                    // Draw subtle grid dots
+                    val rows = 8
+                    val cols = 8
+                    for (r in 1 until rows) {
+                        for (c in 1 until cols) {
+                            drawCircle(
+                                color = CyberCyan.copy(alpha = 0.08f),
+                                radius = 1.25f,
+                                center = Offset(w * (c.toFloat() / cols), h * (r.toFloat() / rows))
+                            )
+                        }
+                    }
+
+                    // 2. Compute dynamic floating positions of all nodes
+                    val computedPositions = ArrayList<Offset>()
+                    for (i in basePositions.indices) {
+                        val basePos = basePositions[i]
+                        val scaleFactor = when (fieldDensityMode) {
+                            0 -> 0.72f
+                            1 -> 0.90f
+                            else -> 1.15f
+                        }
+                        // Add floating drift offsets
+                        val phase = i * 1.05f
+                        val driftX = kotlin.math.sin(driftOffset + phase) * 0.045f
+                        val driftY = kotlin.math.cos(driftOffset * 0.83f + phase) * 0.045f
+                        
+                        val finalX = (0.5f + (basePos.x - 0.5f) * scaleFactor + driftX) * w
+                        val finalY = (0.5f + (basePos.y - 0.5f) * scaleFactor + driftY) * h
+                        computedPositions.add(Offset(finalX, finalY))
+                    }
+
+                    // 3. Draw connection fibers/lines (D3 dynamic edges)
+                    connections.forEach { conn ->
+                        val p1 = computedPositions[conn.first]
+                        val p2 = computedPositions[conn.second]
+
+                        // Check if nodes are selected
+                        val isPartiallySelected = conn.first == selectedNodeIndex || conn.second == selectedNodeIndex
+                        val lineAlpha = if (isPartiallySelected) 0.75f else (globalCoherence.toFloat() * 0.28f).coerceIn(0.12f, 0.45f)
+                        val lineColor = if (isPartiallySelected) CyberTeal else CyberCyan
+
+                        // Draw continuous cyber string
+                        drawLine(
+                            color = lineColor.copy(alpha = lineAlpha),
+                            start = p1,
+                            end = p2,
+                            strokeWidth = if (isPartiallySelected) 2.2f else 1.2f
+                        )
+
+                        // 4. Particle Pulses flowing through the network fibers
+                        val currentX = p1.x + (p2.x - p1.x) * waveOffset
+                        val currentY = p1.y + (p2.y - p1.y) * waveOffset
+                        
+                        drawCircle(
+                            color = CyberTeal,
+                            radius = if (globalCoherence > 0.75) 3.5f else 2.5f,
+                            center = Offset(currentX, currentY)
+                        )
+                    }
+
+                    // 5. Draw global active energy ripples expanding outward on click
+                    if (activeRippleProgress.value > 0.01f && activeRippleProgress.value < 0.99f) {
+                        val origin = if (selectedNodeIndex != null && selectedNodeIndex!! < computedPositions.size) {
+                            computedPositions[selectedNodeIndex!!]
+                        } else {
+                            Offset(w / 2f, h / 2f)
+                        }
+                        
+                        drawCircle(
+                            color = CyberTeal.copy(alpha = 0.55f * (1f - activeRippleProgress.value)),
+                            radius = w * 0.65f * activeRippleProgress.value,
+                            center = origin,
+                            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3.dp.toPx())
+                        )
+                    }
+
+                    // 6. Draw individual nodes
+                    for (i in computedPositions.indices) {
+                        val pos = computedPositions[i]
+                        val isSelected = selectedNodeIndex == i
+                        val nodeColor = when (i) {
+                            1 -> CyberTeal     // Prime lambda core
+                            3 -> CyberPurple   // DNA
+                            0, 2 -> CyberCyan  // Cortex / Coherence
+                            else -> Color.White.copy(alpha = 0.85f)
+                        }
+
+                        // Local dynamic pulse
+                        val baseNodePulse = 1f + kotlin.math.sin(driftOffset * 2f + i) * 0.12f
+
+                        // Outer glowing aura
+                        drawCircle(
+                            color = nodeColor.copy(alpha = if (isSelected) 0.2f else 0.06f),
+                            radius = 22.dp.toPx() * baseNodePulse * (if (isSelected) 1.5f else 1f),
+                            center = pos
+                        )
+
+                        // Outer halo outline
+                        drawCircle(
+                            color = nodeColor.copy(alpha = if (isSelected) 0.88f else 0.25f),
+                            radius = 12.dp.toPx() * (if (isSelected) 1.25f else 1f),
+                            center = pos,
+                            style = androidx.compose.ui.graphics.drawscope.Stroke(width = if (isSelected) 2.dp.toPx() else 1.dp.toPx())
+                        )
+
+                        // Core active solid node dot
+                        drawCircle(
+                            color = nodeColor,
+                            radius = if (isSelected) 7.dp.toPx() else 5.dp.toPx(),
+                            center = pos
+                        )
+                    }
+                }
+
+                // Selected Node HUD Overlay card (Fully responsive floating dialog overlay)
+                if (selectedNodeIndex != null) {
+                    val sIndex = selectedNodeIndex!!
+                    val sName = nodeTitles[sIndex]
+                    val sDesc = when (sIndex) {
+                        0 -> "Nuclea la sintonía asociativa agregando transcripciones, metadatos y conceptos rectores."
+                        1 -> "Regula dinámicamente la sintonía de coherencia Lambda actual del hipercampo."
+                        2 -> "Orquesta la constante teórica de Jacobo Grinberg sobre la unificación de lattices."
+                        3 -> "Ancla el código invariable de ADN que representa el núcleo central de la app."
+                        4 -> "Almacena los flujos episódicos consolidados en microcapas mnemotécnicas."
+                        else -> "Sostiene la estructura de acoplamiento modelo-realidad contra el ruido estocástico."
+                    }
+                    
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .padding(10.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(CardBackground.copy(alpha = 0.94f))
+                            .border(1.dp, CyberTeal.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+                            .padding(10.dp)
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = sName.uppercase(),
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = CyberTeal
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .size(16.dp)
+                                        .clip(CircleShape)
+                                        .background(Color.White.copy(alpha = 0.1f))
+                                        .clickable { selectedNodeIndex = null }
+                                        .padding(2.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Close,
+                                        contentDescription = "Cerrar HUD",
+                                        tint = Color.White.copy(alpha = 0.6f),
+                                        modifier = Modifier.size(11.dp)
+                                    )
+                                }
+                            }
+                            Text(
+                                text = sDesc,
+                                fontSize = 11.sp,
+                                color = Color.White.copy(alpha = 0.8f),
+                                lineHeight = 13.sp
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Action Triggers Panel at the bottom of the card
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Trigger ripples
+                Button(
+                    onClick = {
+                        onInjectEnergy()
+                        // Launch ripple animation
+                        scope.launch {
+                            activeRippleProgress.snapTo(0f)
+                            activeRippleProgress.animateTo(
+                                targetValue = 1f,
+                                animationSpec = tween(1250, easing = EaseOutExpo)
+                            )
+                        }
+                        android.widget.Toast.makeText(context, "💥 ¡Impulso de Coherencia Inyectado en S.A.F.!", android.widget.Toast.LENGTH_SHORT).show()
+                    },
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(38.dp)
+                        .testTag("inject_pulse_btn"),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = CyberTeal,
+                        contentColor = DeepBackground
+                    ),
+                    shape = RoundedCornerShape(6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.PlayArrow,
+                        contentDescription = null,
+                        modifier = Modifier.size(13.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("INYECTAR PULSO", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                }
+
+                // Change coordinates factor (Field configuration)
+                OutlinedButton(
+                    onClick = {
+                        fieldDensityMode = (fieldDensityMode + 1) % 3
+                        val modeStr = when (fieldDensityMode) {
+                            0 -> "Concentrado (Compacto)"
+                            1 -> "Armónico (Equilibrado)"
+                            else -> "Hipercampo (Expandido)"
+                        }
+                        android.widget.Toast.makeText(context, "Resonancia adaptada: $modeStr", android.widget.Toast.LENGTH_SHORT).show()
+                    },
+                    modifier = Modifier
+                        .height(38.dp)
+                        .testTag("change_density_btn"),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+                    border = BorderStroke(1.dp, CardBorder),
+                    shape = RoundedCornerShape(6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Settings,
+                        contentDescription = null,
+                        modifier = Modifier.size(13.dp),
+                        tint = CyberCyan
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("NODO MESH", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                }
+            }
         }
     }
 }
@@ -2876,16 +3519,35 @@ fun ArchetypesView(viewModel: MythosViewModel) {
                         letterSpacing = 1.sp
                     )
                     
-                    // Button to clear all (cognitive resection of archetypes)
-                    Text(
-                        text = "PURGAR",
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = CoherenceLow,
+                    // Button to clear all (cognitive resection of archetypes - stylized with high response)
+                    Box(
                         modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(CoherenceLow.copy(alpha = 0.12f))
+                            .border(1.dp, CoherenceLow.copy(alpha = 0.45f), RoundedCornerShape(6.dp))
                             .clickable { viewModel.clearAllArchetypes() }
-                            .padding(4.dp)
-                    )
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Delete,
+                                contentDescription = "Purgar Arquetipos",
+                                tint = CoherenceLow,
+                                modifier = Modifier.size(10.dp)
+                            )
+                            Text(
+                                text = "PURGAR REGISTRO",
+                                fontSize = 8.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = CoherenceLow,
+                                letterSpacing = 0.5.sp
+                            )
+                        }
+                    }
                 }
                 
                 // Exclude lastSynthesized to prevent duplicates in current render frame if it matches
@@ -3434,16 +4096,32 @@ fun IdentityCoreView(viewModel: MythosViewModel) {
                 }
 
                 if (invariants.isNotEmpty()) {
-                    Text(
-                        text = "RESETEAR NÚCLEO DE VALORES",
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = CoherenceLow,
+                    Spacer(modifier = Modifier.height(6.dp))
+                    OutlinedButton(
+                        onClick = { viewModel.clearIdentityInvariants() },
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = CoherenceLow
+                        ),
+                        border = BorderStroke(1.2.dp, CoherenceLow.copy(alpha = 0.55f)),
+                        shape = RoundedCornerShape(8.dp),
                         modifier = Modifier
-                            .align(Alignment.CenterHorizontally)
-                            .clickable { viewModel.clearIdentityInvariants() }
-                            .padding(top = 4.dp)
-                    )
+                            .fillMaxWidth()
+                            .height(38.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Delete,
+                            contentDescription = "Limpiar Invariantes",
+                            modifier = Modifier.size(13.dp),
+                            tint = CoherenceLow
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "RESETEAR NÚCLEO DE VALORES",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.5.sp
+                        )
+                    }
                 }
             }
         }
@@ -3909,16 +4587,35 @@ fun RejectionsView(viewModel: MythosViewModel) {
                     )
                     
                     if (rejections.isNotEmpty()) {
-                        Text(
-                            text = "DEPURAR REGISTRO",
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = CoherenceLow,
+                        Box(
                             modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(CoherenceLow.copy(alpha = 0.12f))
+                                .border(1.dp, CoherenceLow.copy(alpha = 0.45f), RoundedCornerShape(6.dp))
                                 .clickable { viewModel.clearRejections() }
-                                .padding(4.dp)
-                                .testTag("clear_rejections_button")
-                        )
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                                .testTag("clear_rejections_button"),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Delete,
+                                    contentDescription = "Depurar Registro",
+                                    tint = CoherenceLow,
+                                    modifier = Modifier.size(10.dp)
+                                )
+                                Text(
+                                    text = "DEPURAR REGISTRO",
+                                    fontSize = 8.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = CoherenceLow,
+                                    letterSpacing = 0.5.sp
+                                )
+                            }
+                        }
                     }
                 }
                 Text(
