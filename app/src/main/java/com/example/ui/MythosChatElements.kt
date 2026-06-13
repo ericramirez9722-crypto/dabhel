@@ -31,6 +31,11 @@ import com.example.data.MythosStateRecord
 import com.example.viewmodel.MythosViewModel
 import kotlinx.coroutines.launch
 
+enum class AppScreen {
+    CHAT,
+    MYTHOS_DASHBOARD
+}
+
 sealed interface ChatMessage {
     val id: String
     val timestamp: Long
@@ -322,7 +327,11 @@ fun MetricPill(label: String, value: String, color: Color) {
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
-fun MythosScreen(viewModel: MythosViewModel) {
+fun ChatScreen(
+    viewModel: MythosViewModel,
+    currentScreen: AppScreen,
+    onScreenChange: (AppScreen) -> Unit
+) {
     val latestState by viewModel.latestMythosState.collectAsStateWithLifecycle()
     val mythosHistory by viewModel.mythosStateList.collectAsStateWithLifecycle()
     val nodes by viewModel.cognitiveNodes.collectAsStateWithLifecycle()
@@ -502,7 +511,53 @@ fun MythosScreen(viewModel: MythosViewModel) {
             .fillMaxSize()
             .background(DeepBackground),
         containerColor = DeepBackground,
-        contentWindowInsets = WindowInsets.safeDrawing
+        contentWindowInsets = WindowInsets.safeDrawing,
+        bottomBar = {
+            NavigationBar(
+                containerColor = CardBackground,
+                tonalElevation = 8.dp,
+                modifier = Modifier.navigationBarsPadding().testTag("app_bottom_navigation")
+            ) {
+                NavigationBarItem(
+                    selected = currentScreen == AppScreen.CHAT,
+                    onClick = { onScreenChange(AppScreen.CHAT) },
+                    label = { Text("Chat", fontWeight = FontWeight.Bold, fontSize = 11.sp) },
+                    icon = {
+                        Icon(
+                            imageVector = Icons.Outlined.Info,
+                            contentDescription = "Pantalla de Chat"
+                        )
+                    },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = CyberTeal,
+                        selectedTextColor = CyberTeal,
+                        indicatorColor = CyberTeal.copy(alpha = 0.12f),
+                        unselectedIconColor = Color.White.copy(alpha = 0.45f),
+                        unselectedTextColor = Color.White.copy(alpha = 0.45f)
+                    ),
+                    modifier = Modifier.testTag("chat_nav_item")
+                )
+                NavigationBarItem(
+                    selected = currentScreen == AppScreen.MYTHOS_DASHBOARD,
+                    onClick = { onScreenChange(AppScreen.MYTHOS_DASHBOARD) },
+                    label = { Text("Panel Mythos", fontWeight = FontWeight.Bold, fontSize = 11.sp) },
+                    icon = {
+                        Icon(
+                            imageVector = Icons.Outlined.Settings,
+                            contentDescription = "Panel Mythos Dashboard"
+                        )
+                    },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = CyberTeal,
+                        selectedTextColor = CyberTeal,
+                        indicatorColor = CyberTeal.copy(alpha = 0.12f),
+                        unselectedIconColor = Color.White.copy(alpha = 0.45f),
+                        unselectedTextColor = Color.White.copy(alpha = 0.45f)
+                    ),
+                    modifier = Modifier.testTag("dashboard_nav_item")
+                )
+            }
+        }
     ) { innerPadding ->
         Box(
             modifier = Modifier
@@ -1482,6 +1537,30 @@ fun MythosScreen(viewModel: MythosViewModel) {
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun MythosScreen(viewModel: MythosViewModel) {
+    var currentScreen by androidx.compose.runtime.saveable.rememberSaveable {
+        mutableStateOf(AppScreen.CHAT)
+    }
+    
+    when (currentScreen) {
+        AppScreen.CHAT -> {
+            ChatScreen(
+                viewModel = viewModel,
+                currentScreen = currentScreen,
+                onScreenChange = { currentScreen = it }
+            )
+        }
+        AppScreen.MYTHOS_DASHBOARD -> {
+            OldMythosScreen(
+                viewModel = viewModel,
+                currentScreen = currentScreen,
+                onScreenChange = { currentScreen = it }
+            )
         }
     }
 }

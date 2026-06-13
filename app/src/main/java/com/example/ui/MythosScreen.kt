@@ -567,7 +567,11 @@ fun NeuralMemoryDashboardComponent(
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
-fun OldMythosScreen(viewModel: MythosViewModel) {
+fun OldMythosScreen(
+    viewModel: MythosViewModel,
+    currentScreen: AppScreen,
+    onScreenChange: (AppScreen) -> Unit
+) {
     val latestState by viewModel.latestMythosState.collectAsStateWithLifecycle()
     val mythosHistory by viewModel.mythosStateList.collectAsStateWithLifecycle()
     val nodes by viewModel.cognitiveNodes.collectAsStateWithLifecycle()
@@ -693,7 +697,53 @@ fun OldMythosScreen(viewModel: MythosViewModel) {
             .fillMaxSize()
             .background(DeepBackground),
         containerColor = DeepBackground,
-        contentWindowInsets = WindowInsets.safeDrawing
+        contentWindowInsets = WindowInsets.safeDrawing,
+        bottomBar = {
+            NavigationBar(
+                containerColor = CardBackground,
+                tonalElevation = 8.dp,
+                modifier = Modifier.navigationBarsPadding().testTag("app_bottom_navigation")
+            ) {
+                NavigationBarItem(
+                    selected = currentScreen == AppScreen.CHAT,
+                    onClick = { onScreenChange(AppScreen.CHAT) },
+                    label = { Text("Chat", fontWeight = FontWeight.Bold, fontSize = 11.sp) },
+                    icon = {
+                        Icon(
+                            imageVector = Icons.Outlined.Info,
+                            contentDescription = "Pantalla de Chat"
+                        )
+                    },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = CyberTeal,
+                        selectedTextColor = CyberTeal,
+                        indicatorColor = CyberTeal.copy(alpha = 0.12f),
+                        unselectedIconColor = Color.White.copy(alpha = 0.45f),
+                        unselectedTextColor = Color.White.copy(alpha = 0.45f)
+                    ),
+                    modifier = Modifier.testTag("chat_nav_item")
+                )
+                NavigationBarItem(
+                    selected = currentScreen == AppScreen.MYTHOS_DASHBOARD,
+                    onClick = { onScreenChange(AppScreen.MYTHOS_DASHBOARD) },
+                    label = { Text("Panel Mythos", fontWeight = FontWeight.Bold, fontSize = 11.sp) },
+                    icon = {
+                        Icon(
+                            imageVector = Icons.Outlined.Settings,
+                            contentDescription = "Panel Mythos Dashboard"
+                        )
+                    },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = CyberTeal,
+                        selectedTextColor = CyberTeal,
+                        indicatorColor = CyberTeal.copy(alpha = 0.12f),
+                        unselectedIconColor = Color.White.copy(alpha = 0.45f),
+                        unselectedTextColor = Color.White.copy(alpha = 0.45f)
+                    ),
+                    modifier = Modifier.testTag("dashboard_nav_item")
+                )
+            }
+        }
     ) { innerPadding ->
         Column(
             modifier = Modifier
