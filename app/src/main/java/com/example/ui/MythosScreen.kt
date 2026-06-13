@@ -567,7 +567,7 @@ fun NeuralMemoryDashboardComponent(
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
-fun MythosScreen(viewModel: MythosViewModel) {
+fun OldMythosScreen(viewModel: MythosViewModel) {
     val latestState by viewModel.latestMythosState.collectAsStateWithLifecycle()
     val mythosHistory by viewModel.mythosStateList.collectAsStateWithLifecycle()
     val nodes by viewModel.cognitiveNodes.collectAsStateWithLifecycle()
