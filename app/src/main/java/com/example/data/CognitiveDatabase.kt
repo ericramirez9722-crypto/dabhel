@@ -14,9 +14,10 @@ import androidx.room.*
         IdentityInvariant::class,
         CoherenceHistoryRecord::class,
         NeuralMemoryEntry::class,
-        NarrativeAnchor::class
+        NarrativeAnchor::class,
+        SyntergicLogEntity::class
     ],
-    version = 7,
+    version = 8,
     exportSchema = false
 )
 abstract class CognitiveDatabase : RoomDatabase() {
@@ -30,6 +31,7 @@ abstract class CognitiveDatabase : RoomDatabase() {
     abstract fun coherenceHistoryDao(): CoherenceHistoryDao
     abstract fun neuralMemoryDao(): NeuralMemoryDao
     abstract fun narrativeAnchorDao(): NarrativeAnchorDao
+    abstract fun syntergicLogDao(): SyntergicLogDao
 
     companion object {
         @Volatile

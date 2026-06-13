@@ -165,5 +165,26 @@ interface NarrativeAnchorDao {
     suspend fun clear()
 }
 
+@Dao
+interface SyntergicLogDao {
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(log: SyntergicLogEntity)
+
+    @Query("DELETE FROM syntergic_logs WHERE id NOT IN (SELECT id FROM syntergic_logs ORDER BY timestamp DESC LIMIT 1000)")
+    suspend fun pruneOldLogs()
+
+    @Query("SELECT * FROM syntergic_logs ORDER BY timestamp DESC")
+    fun observeAll(): Flow<List<SyntergicLogEntity>>
+
+    @Query("DELETE FROM syntergic_logs")
+    suspend fun clear()
+
+    @Transaction
+    suspend fun insertAndPrune(log: SyntergicLogEntity) {
+        insert(log)
+        pruneOldLogs()
+    }
+}
+
 
 

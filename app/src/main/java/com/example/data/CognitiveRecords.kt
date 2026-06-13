@@ -122,5 +122,18 @@ data class NarrativeAnchor(
     val timestamp: Long = System.currentTimeMillis()
 )
 
+@Entity(tableName = "syntergic_logs")
+data class SyntergicLogEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val timestamp: Long = System.currentTimeMillis(),
+    val rawInput: String,
+    val processedPayload: String,
+    val latencyMs: Long,
+    val distortionIndex: Double,
+    val syntropyGain: Double,
+    val isCoherenceValid: Boolean
+)
+
+
 
 

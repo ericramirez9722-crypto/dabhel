@@ -218,6 +218,353 @@ fun GlassmorphicStatusBar(
     }
 }
 
+sealed class UnionMemoryEntry {
+    abstract val uniqueId: String
+    abstract val timestamp: Long
+    abstract val title: String
+    abstract val categoryLabel: String
+    abstract val iconEmoji: String
+    abstract val accentColor: Color
+    abstract val metadata: List<Pair<String, String>>
+
+    data class Episodic(val entry: com.example.data.EpisodicMemory) : UnionMemoryEntry() {
+        override val uniqueId: String = "episodic_${entry.id}"
+        override val timestamp: Long = entry.timestamp
+        override val title: String = entry.text
+        override val categoryLabel: String = "LOG EPISÓDICO [${entry.eventType.uppercase()}]"
+        override val iconEmoji: String = "📡"
+        override val accentColor: Color = CyberTeal
+        override val metadata: List<Pair<String, String>> = listOf(
+            "EVENT_TYPE" to entry.eventType,
+            "LOCAL_LAMBDA" to "Λ = %.2f".format(entry.localLambda),
+            "NODE_SOURCE" to entry.nodeSource,
+            "TIMESTAMP_MS" to "${entry.timestamp}"
+        )
+    }
+
+    data class Vector(val entry: com.example.data.NeuralMemoryEntry) : UnionMemoryEntry() {
+        override val uniqueId: String = "vector_${entry.id}"
+        override val timestamp: Long = entry.timestamp
+        override val title: String = entry.infoText
+        override val categoryLabel: String = "VECTOR NEURAL"
+        override val iconEmoji: String = "🧠"
+        override val accentColor: Color = CyberCyan
+        override val metadata: List<Pair<String, String>> = listOf(
+            "INVARIANT_REF" to entry.associatedInvariantConcept,
+            "COGNITIVE_CAT" to entry.associatedInvariantCategory,
+            "SIMILARITY_IDX" to "S = %.2f".format(entry.associationSimilarity),
+            "VECTOR_DIM" to "32-D",
+            "TIMESTAMP_MS" to "${entry.timestamp}"
+        )
+    }
+}
+
+@Composable
+fun NeuralMemoryDashboardComponent(
+    recentEpisodics: List<com.example.data.EpisodicMemory>,
+    neuralMemoryList: List<com.example.data.NeuralMemoryEntry>,
+    modifier: Modifier = Modifier
+) {
+    var isExpanded by remember { mutableStateOf(true) }
+    var showEpisodicLogs by remember { mutableStateOf(true) }
+    var showVectorMemories by remember { mutableStateOf(true) }
+    
+    // Dynamic tracking of expanded item IDs to toggle details/metadata visibility
+    var expandedItemIds by remember { mutableStateOf(setOf<String>()) }
+
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .testTag("neural_memory_dashboard_card"),
+        colors = CardDefaults.cardColors(containerColor = CardBackground.copy(alpha = 0.45f)),
+        border = BorderStroke(1.dp, CardBorder)
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            // Header Row: interactive toggle for expanded list visibility
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { isExpanded = !isExpanded }
+                    .padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "🧠",
+                        fontSize = 18.sp
+                    )
+                    Column {
+                        Text(
+                            text = "NEURAL MEMORY HUD",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = CyberTeal,
+                            letterSpacing = 1.sp
+                        )
+                        Text(
+                            text = "Matriz de percepciones y almacén vectorial",
+                            fontSize = 9.sp,
+                            color = Color.White.copy(alpha = 0.5f)
+                        )
+                    }
+                }
+                
+                IconButton(
+                    onClick = { isExpanded = !isExpanded },
+                    modifier = Modifier
+                        .size(40.dp)
+                        .testTag("toggle_neural_memory_expand")
+                ) {
+                    Icon(
+                        imageVector = if (isExpanded) Icons.Outlined.KeyboardArrowUp else Icons.Outlined.KeyboardArrowDown,
+                        contentDescription = "Toggle component visibility",
+                        tint = CyberCyan,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+
+            AnimatedVisibility(
+                visible = isExpanded,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = "Monitoreo en tiempo real del sensorium global. Controla la visibilidad de los flujos de memoria o expande entradas individuales para auditar metadatos de sincronización.",
+                        fontSize = 11.sp,
+                        color = Color.White.copy(alpha = 0.5f),
+                        lineHeight = 14.sp
+                    )
+
+                    // Stream Visibility Toggles (Episodic vs Vector)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // Episodic Toggle Chip
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (showEpisodicLogs) CyberTeal.copy(alpha = 0.15f) else CardBackground.copy(alpha = 0.3f))
+                                .border(
+                                    width = 1.dp,
+                                    color = if (showEpisodicLogs) CyberTeal else CardBorder.copy(alpha = 0.5f),
+                                    shape = RoundedCornerShape(8.dp)
+                                )
+                                .clickable { showEpisodicLogs = !showEpisodicLogs }
+                                .padding(vertical = 10.dp, horizontal = 12.dp)
+                                .testTag("filter_episodic_chip"),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(6.dp)
+                                        .clip(CircleShape)
+                                        .background(if (showEpisodicLogs) CyberTeal else Color.White.copy(alpha = 0.3f))
+                                )
+                                Text(
+                                    text = "Log Episódico (${recentEpisodics.size})",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (showEpisodicLogs) CyberTeal else Color.White.copy(alpha = 0.4f)
+                                )
+                            }
+                        }
+
+                        // Vector Memory Toggle Chip
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (showVectorMemories) CyberCyan.copy(alpha = 0.15f) else CardBackground.copy(alpha = 0.3f))
+                                .border(
+                                    width = 1.dp,
+                                    color = if (showVectorMemories) CyberCyan else CardBorder.copy(alpha = 0.5f),
+                                    shape = RoundedCornerShape(8.dp)
+                                )
+                                .clickable { showVectorMemories = !showVectorMemories }
+                                .padding(vertical = 10.dp, horizontal = 12.dp)
+                                .testTag("filter_vector_chip"),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(6.dp)
+                                        .clip(CircleShape)
+                                        .background(if (showVectorMemories) CyberCyan else Color.White.copy(alpha = 0.3f))
+                                )
+                                Text(
+                                    text = "Vectores Neurales (${neuralMemoryList.size})",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (showVectorMemories) CyberCyan else Color.White.copy(alpha = 0.4f)
+                                )
+                            }
+                        }
+                    }
+
+                    // Combined and Sorted Event Streams
+                    val combinedEntries = remember(recentEpisodics, neuralMemoryList, showEpisodicLogs, showVectorMemories) {
+                        val list = mutableListOf<UnionMemoryEntry>()
+                        if (showEpisodicLogs) {
+                            recentEpisodics.forEach {
+                                list.add(UnionMemoryEntry.Episodic(it))
+                            }
+                        }
+                        if (showVectorMemories) {
+                            neuralMemoryList.forEach {
+                                list.add(UnionMemoryEntry.Vector(it))
+                            }
+                        }
+                        list.sortedByDescending { it.timestamp }
+                    }
+
+                    if (combinedEntries.isEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(80.dp)
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(CardBackground.copy(alpha = 0.2f))
+                                .border(0.5.dp, CardBorder.copy(alpha = 0.5f), RoundedCornerShape(6.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "Sin registros coincidentes en la memoria",
+                                fontSize = 10.sp,
+                                color = Color.White.copy(alpha = 0.4f)
+                            )
+                        }
+                    } else {
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            combinedEntries.take(5).forEach { entry ->
+                                val uniqueId = entry.uniqueId
+                                val isItemExpanded = expandedItemIds.contains(uniqueId)
+
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            expandedItemIds = if (isItemExpanded) {
+                                                expandedItemIds - uniqueId
+                                            } else {
+                                                expandedItemIds + uniqueId
+                                            }
+                                        }
+                                        .testTag("memory_dashboard_entry_$uniqueId"),
+                                    colors = CardDefaults.cardColors(containerColor = CardBackground.copy(alpha = 0.3f)),
+                                    border = BorderStroke(0.5.dp, if (isItemExpanded) entry.accentColor.copy(alpha = 0.6f) else CardBorder.copy(alpha = 0.5f)),
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Column(modifier = Modifier.padding(10.dp)) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                                modifier = Modifier.weight(1f)
+                                            ) {
+                                                Text(
+                                                    text = entry.iconEmoji,
+                                                    fontSize = 14.sp
+                                                )
+                                                Column {
+                                                    Text(
+                                                        text = entry.title,
+                                                        fontSize = 11.sp,
+                                                        fontWeight = FontWeight.SemiBold,
+                                                        color = Color.White,
+                                                        maxLines = 1,
+                                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                                    )
+                                                    Text(
+                                                        text = entry.categoryLabel,
+                                                        fontSize = 8.sp,
+                                                        color = entry.accentColor,
+                                                        fontWeight = FontWeight.Bold,
+                                                        fontFamily = FontFamily.Monospace,
+                                                        letterSpacing = 0.5.sp
+                                                    )
+                                                }
+                                            }
+
+                                            Text(
+                                                text = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date(entry.timestamp)),
+                                                fontSize = 9.sp,
+                                                color = Color.White.copy(alpha = 0.4f),
+                                                fontFamily = FontFamily.Monospace
+                                            )
+                                        }
+
+                                        // Detailed audit metadata viewable via toggle click
+                                        AnimatedVisibility(
+                                            visible = isItemExpanded,
+                                            enter = expandVertically() + fadeIn(),
+                                            exit = shrinkVertically() + fadeOut()
+                                        ) {
+                                            Column(
+                                                modifier = Modifier
+                                                    .padding(top = 8.dp)
+                                                    .fillMaxWidth()
+                                                    .background(DeepBackground.copy(alpha = 0.4f), RoundedCornerShape(4.dp))
+                                                    .padding(8.dp),
+                                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                                            ) {
+                                                entry.metadata.forEach { (key, valStr) ->
+                                                    Row(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        horizontalArrangement = Arrangement.SpaceBetween
+                                                    ) {
+                                                        Text(
+                                                            text = key,
+                                                            fontSize = 8.sp,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = Color.White.copy(alpha = 0.4f),
+                                                            fontFamily = FontFamily.Monospace
+                                                        )
+                                                        Text(
+                                                            text = valStr,
+                                                            fontSize = 8.5.sp,
+                                                            color = Color.White.copy(alpha = 0.85f),
+                                                            fontFamily = FontFamily.Monospace
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun MythosScreen(viewModel: MythosViewModel) {
@@ -226,6 +573,7 @@ fun MythosScreen(viewModel: MythosViewModel) {
     val nodes by viewModel.cognitiveNodes.collectAsStateWithLifecycle()
     val recentEpisodics by viewModel.recentEpisodics.collectAsStateWithLifecycle()
     val semanticTraces by viewModel.semanticTraces.collectAsStateWithLifecycle()
+    val neuralMemoryList by viewModel.neuralMemoryList.collectAsStateWithLifecycle()
     val isAnalyzing by viewModel.isAnalyzing.collectAsStateWithLifecycle()
     val selectedNodeId by viewModel.selectedNode.collectAsStateWithLifecycle()
     val rawEvolLog by viewModel.internalRuleLogs.collectAsStateWithLifecycle()
@@ -619,6 +967,15 @@ fun MythosScreen(viewModel: MythosViewModel) {
                         )
                     }
 
+                    // Unified Neural Memory Dashboard Component
+                    item {
+                        NeuralMemoryDashboardComponent(
+                            recentEpisodics = recentEpisodics,
+                            neuralMemoryList = neuralMemoryList,
+                            modifier = Modifier.padding(bottom = 4.dp)
+                        )
+                    }
+
                     // Neural Distributed Lattice Block
                     item {
                         Column {
@@ -859,7 +1216,7 @@ fun MythosScreen(viewModel: MythosViewModel) {
                                         .padding(3.dp),
                                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                                 ) {
-                                    val tabs = listOf("Mythos", "Academia", "Identidad", "Mythos Registry", "Anclajes", "Memoria Neural", "Métricas", "Conceptos", "Rechazos")
+                                    val tabs = listOf("Mythos", "Academia", "Identidad", "Mythos Registry", "Anclajes", "Memoria Neural", "Métricas", "Conceptos", "Rechazos", "Campo Coherencia")
                                     tabs.forEachIndexed { index, label ->
                                         val isSelected = activeTab == index
                                         val animatedBgColor by animateColorAsState(
@@ -919,6 +1276,7 @@ fun MythosScreen(viewModel: MythosViewModel) {
                                     6 -> MetricsDashboardView(viewModel = viewModel)
                                     7 -> ConceptosView(traces = semanticTraces, episodics = recentEpisodics, viewModel = viewModel)
                                     8 -> RejectionsView(viewModel = viewModel)
+                                    9 -> CoherenceLogsView(viewModel = viewModel)
                                 }
                             }
                         }
@@ -5681,6 +6039,313 @@ fun NarrativeAnchorsView(viewModel: MythosViewModel) {
                                         fontSize = 11.sp,
                                         color = Color.White.copy(alpha = 0.8f),
                                         lineHeight = 15.sp
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun CoherenceLogsView(viewModel: MythosViewModel) {
+    val logs by viewModel.syntergicLogs.collectAsStateWithLifecycle()
+    var expandedLogIds by remember { mutableStateOf(setOf<Long>()) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 12.dp)
+            .testTag("coherence_logs_view"),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        Card(
+            colors = CardDefaults.cardColors(containerColor = CardBackground.copy(alpha = 0.6f)),
+            border = BorderStroke(1.dp, CardBorder)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "DEPURADOR CAMPO DE COHERENCIA",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = CyberTeal,
+                        letterSpacing = 1.sp
+                    )
+                    
+                    if (logs.isNotEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(CoherenceLow.copy(alpha = 0.12f))
+                                .border(1.dp, CoherenceLow.copy(alpha = 0.45f), RoundedCornerShape(6.dp))
+                                .clickable { viewModel.clearSyntergicLogs() }
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                                .testTag("clear_coherence_logs_button"),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Delete,
+                                    contentDescription = "Limpiar Logs",
+                                    tint = CoherenceLow,
+                                    modifier = Modifier.size(10.dp)
+                                )
+                                Text(
+                                    text = "LIMPIAR REGISTROS",
+                                    fontSize = 8.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = CoherenceLow,
+                                    letterSpacing = 0.5.sp
+                                )
+                            }
+                        }
+                    }
+                }
+                Text(
+                    text = "Monitorea la transformación de las deconstrucciones semánticas a través de la matriz del Campo de Coherencia local. Cada registro audita la latencia del procesamiento y las métricas computadas de sintropía y distorsión antes de que el payload sea presentado al Cortex de Inteligencia Artificial.",
+                    fontSize = 11.sp,
+                    color = Color.White.copy(alpha = 0.5f),
+                    lineHeight = 14.sp
+                )
+            }
+        }
+
+        if (logs.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(180.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(CardBackground.copy(alpha = 0.3f))
+                    .border(BorderStroke(0.5.dp, CardBorder), RoundedCornerShape(8.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "🔬",
+                        fontSize = 32.sp
+                    )
+                    Text(
+                        text = "SIN CONFIGURACIÓN DE REGISTROS",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = CyberCyan,
+                        letterSpacing = 1.sp
+                    )
+                    Text(
+                        text = "Ingresa percepciones para ver la traza del Campo de Coherencia.",
+                        fontSize = 10.sp,
+                        color = Color.White.copy(alpha = 0.4f)
+                    )
+                }
+            }
+        } else {
+            logs.forEach { log ->
+                val isExpanded = expandedLogIds.contains(log.id)
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            expandedLogIds = if (isExpanded) {
+                                expandedLogIds - log.id
+                            } else {
+                                expandedLogIds + log.id
+                            }
+                        },
+                    colors = CardDefaults.cardColors(containerColor = CardBackground.copy(alpha = 0.4f)),
+                    border = BorderStroke(
+                        0.8.dp, 
+                        if (log.isCoherenceValid) CyberTeal.copy(alpha = 0.6f) else CoherenceLow.copy(alpha = 0.6f)
+                    ),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(if (log.isCoherenceValid) CyberTeal.copy(alpha = 0.15f) else CoherenceLow.copy(alpha = 0.15f))
+                                        .border(
+                                            0.5.dp, 
+                                            if (log.isCoherenceValid) CyberTeal.copy(alpha = 0.5f) else CoherenceLow.copy(alpha = 0.5f), 
+                                            RoundedCornerShape(4.dp)
+                                        )
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                ) {
+                                    Text(
+                                        text = if (log.isCoherenceValid) "SINTROPÍA VÁLIDA" else "SINTROPÍA COMPROMETIDA",
+                                        fontSize = 8.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (log.isCoherenceValid) CyberTeal else CoherenceLow,
+                                        letterSpacing = 0.5.sp
+                                    )
+                                }
+                                
+                                Text(
+                                    text = "${log.latencyMs}ms",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = CyberCyan,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                            }
+
+                            Text(
+                                text = java.text.SimpleDateFormat(
+                                    "yyyy-MM-dd HH:mm:ss", 
+                                    java.util.Locale.getDefault()
+                                ).format(java.util.Date(log.timestamp)),
+                                fontSize = 9.sp,
+                                color = Color.White.copy(alpha = 0.4f),
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+
+                        // Input Transformation Summary (User friendly)
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(
+                                text = "ENTRADA ORIGINAL SENSORIUM:",
+                                fontSize = 8.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White.copy(alpha = 0.4f),
+                                letterSpacing = 0.5.sp
+                            )
+                            SelectionContainer {
+                                Text(
+                                    text = log.rawInput,
+                                    fontSize = 11.sp,
+                                    color = Color.White,
+                                    lineHeight = 15.sp
+                                )
+                            }
+                        }
+
+                        // Divider and payload
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(
+                                text = "PAYLOAD REDIRECIOCANADO AL CORTEX:",
+                                fontSize = 8.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = CyberTeal,
+                                letterSpacing = 0.5.sp
+                            )
+                            SelectionContainer {
+                                Text(
+                                    text = log.processedPayload,
+                                    fontSize = 11.sp,
+                                    color = CyberCyan,
+                                    lineHeight = 15.sp,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                            }
+                        }
+
+                        // Expanded view with mathematical details / matrices
+                        AnimatedVisibility(
+                            visible = isExpanded,
+                            enter = expandVertically() + fadeIn(),
+                            exit = shrinkVertically() + fadeOut()
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 8.dp)
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(DeepBackground)
+                                    .border(1.dp, CardBorder)
+                                    .padding(10.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Text(
+                                    text = "MÉTRICAS DEL CAMPO SINTÉRGICO",
+                                    fontSize = 8.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = CyberTeal,
+                                    letterSpacing = 0.5.sp
+                                )
+                                
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = "Ganancia de Sintropía (Local λ):",
+                                        fontSize = 10.sp,
+                                        color = Color.White.copy(alpha = 0.6f)
+                                    )
+                                    Text(
+                                        text = "%.4f".format(log.syntropyGain),
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = CyberTeal,
+                                        fontFamily = FontFamily.Monospace
+                                    )
+                                }
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = "Índice de Distorsión (Fase Drift Index):",
+                                        fontSize = 10.sp,
+                                        color = Color.White.copy(alpha = 0.6f)
+                                    )
+                                    Text(
+                                        text = "%.4f".format(log.distortionIndex),
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (log.distortionIndex < 0.15) CyberCyan else CoherenceLow,
+                                        fontFamily = FontFamily.Monospace
+                                    )
+                                }
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = "Alineación de Conectivas Coherentes:",
+                                        fontSize = 10.sp,
+                                        color = Color.White.copy(alpha = 0.6f)
+                                    )
+                                    Text(
+                                        text = if (log.isCoherenceValid) "OPTIMIZADO" else "DEGRADADO",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (log.isCoherenceValid) CyberTeal else CoherenceLow
                                     )
                                 }
                             }

@@ -43,6 +43,9 @@ class MythosViewModel(application: Application) : AndroidViewModel(application) 
     val narrativeAnchors: StateFlow<List<com.example.data.NarrativeAnchor>> = db.narrativeAnchorDao().observeAll()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val syntergicLogs: StateFlow<List<SyntergicLogEntity>> = db.syntergicLogDao().observeAll()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     private val _isSynthesizingAnchors = MutableStateFlow(false)
     val isSynthesizingAnchors: StateFlow<Boolean> = _isSynthesizingAnchors.asStateFlow()
 
@@ -746,6 +749,16 @@ class MythosViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch {
             try {
                 db.neuralMemoryDao().clear()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    fun clearSyntergicLogs() {
+        viewModelScope.launch {
+            try {
+                db.syntergicLogDao().clear()
             } catch (e: Exception) {
                 e.printStackTrace()
             }

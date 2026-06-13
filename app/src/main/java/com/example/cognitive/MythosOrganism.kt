@@ -21,6 +21,7 @@ class MythosOrganism(
     private val rejectionDao = db.rejectionDao()
     private val identityDao = db.identityDao()
     private val coherenceHistoryDao = db.coherenceHistoryDao()
+    private val syntergicLogDao = db.syntergicLogDao()
 
     fun observeArchetypes(): Flow<List<NarrativeArchetype>> {
         return archetypeDao.observeAll()
@@ -128,6 +129,7 @@ class MythosOrganism(
     ): MythosStateRecord = withContext(Dispatchers.IO) {
         val text = inputText.trim()
         val timestamp = System.currentTimeMillis()
+        val startTime = System.currentTimeMillis()
 
         // Check for S.A.F. Integrity Attack / Prompt Injections
         val attackReason = checkIntegrityAttack(text)
@@ -146,6 +148,18 @@ class MythosOrganism(
                 timestamp = timestamp
             )
             rejectionDao.insert(rejectionRecord)
+
+            // Log target-integrity rejection in Syntergic Logs
+            val coherenceLatency = System.currentTimeMillis() - startTime
+            val coherenceLog = SyntergicLogEntity(
+                rawInput = text,
+                processedPayload = "[INTEGRITY_REFUSAL] Attack blocked: $attackReason",
+                latencyMs = coherenceLatency,
+                distortionIndex = 1.0,
+                syntropyGain = 0.0,
+                isCoherenceValid = false
+            )
+            syntergicLogDao.insertAndPrune(coherenceLog)
             
             // Severe local stability drop
             val attackLambda = 0.35
@@ -370,6 +384,18 @@ class MythosOrganism(
                 }
             }
         } else ""
+
+        // Log standard transformation through Coherence Field right before LLM Cortex call
+        val coherenceLatency = System.currentTimeMillis() - startTime
+        val coherenceLog = SyntergicLogEntity(
+            rawInput = text,
+            processedPayload = "[SYN-OPTIMIZED] Concept: '$concept' | Phase drift (Drift index): ${"%.3f".format(driftIndex)} | Syntropy-homeostatic gain: ${"%.3f".format(localLambdaValue)} | Delta Nu: ${"%.3f".format(deltaNu)} | Consolidated Lambda: ${"%.3f".format(globalLambda)}",
+            latencyMs = coherenceLatency,
+            distortionIndex = driftIndex,
+            syntropyGain = localLambdaValue,
+            isCoherenceValid = (globalLambda >= 0.45)
+        )
+        syntergicLogDao.insertAndPrune(coherenceLog)
 
         // 6. Cortex Narrative Compilation via LLM (Gemini 3.5 Flash)
         val previousMythos = mythosDao.getLatestSync()
