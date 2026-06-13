@@ -20,8 +20,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -50,6 +52,171 @@ val CyberPurple = Color(0xFF9D4EDD) // deep cosmic violet
 val CoherenceHigh = CyberTeal
 val CoherenceMid = CyberCyan
 val CoherenceLow = Color(0xFFEF4444) // coral pink warning
+
+@Composable
+fun GlassmorphicNodeContainer(
+    modifier: Modifier = Modifier,
+    isSelected: Boolean,
+    backgroundColor: Color,
+    borderColor: Color,
+    nodeId: String,
+    onClick: () -> Unit,
+    content: @Composable () -> Unit
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(12.dp))
+            .clickable { onClick() }
+            .testTag("node_$nodeId")
+    ) {
+        // Real-time backdrop-filter: blur(10px) simulation in Compose
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .blur(10.dp, edgeTreatment = BlurredEdgeTreatment.Unbounded)
+                .background(backgroundColor)
+        )
+        // Semi-transparent border highlight
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .border(
+                    width = 1.5.dp,
+                    color = borderColor,
+                    shape = RoundedCornerShape(12.dp)
+                )
+        )
+        // Forced 16px (16.dp) padding container for nodes
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp)
+        ) {
+            content()
+        }
+    }
+}
+
+@Composable
+fun GlassmorphicStatusBar(
+    modifier: Modifier = Modifier,
+    coherenceValue: Double,
+    isSyncing: Boolean,
+    isSyncEnabled: Boolean
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .testTag("glassmorphic_status_bar")
+    ) {
+        // Real-time backdrop-filter: blur(10px) simulation in Compose
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .blur(10.dp, edgeTreatment = BlurredEdgeTreatment.Unbounded)
+                .background(CardBackground.copy(alpha = 0.45f))
+        )
+        // Semi-transparent border highlight
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .border(
+                    width = 1.dp,
+                    color = CardBorder.copy(alpha = 0.6f),
+                    shape = RoundedCornerShape(8.dp)
+                )
+        )
+        // Inside components
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Neural Coherence
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Info,
+                    contentDescription = null,
+                    tint = if (coherenceValue > 0.45) CyberTeal else CoherenceLow,
+                    modifier = Modifier.size(14.dp)
+                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = "NEURAL COHERENCE:",
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White.copy(alpha = 0.6f),
+                        letterSpacing = 0.5.sp
+                    )
+                    Text(
+                        text = "%.1f%%".format(coherenceValue * 100),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (coherenceValue > 0.45) CyberTeal else CoherenceLow,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
+            }
+
+            // Sync Status
+            val syncText = when {
+                isSyncing -> "SYNCING"
+                isSyncEnabled -> "SYNCHRONIZED"
+                else -> "DESYNC"
+            }
+            val syncColor = when {
+                isSyncing -> CyberCyan
+                isSyncEnabled -> CyberTeal
+                else -> Color(0xFFFBBF24)
+            }
+            val syncIcon = when {
+                isSyncing -> Icons.Outlined.Refresh
+                isSyncEnabled -> Icons.Outlined.CheckCircle
+                else -> Icons.Outlined.Warning
+            }
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(
+                    text = "MYTHOS SYNC:",
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White.copy(alpha = 0.6f),
+                    letterSpacing = 0.5.sp
+                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(
+                        imageVector = syncIcon,
+                        contentDescription = null,
+                        tint = syncColor,
+                        modifier = Modifier.size(12.dp)
+                    )
+                    Text(
+                        text = syncText,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = syncColor,
+                        letterSpacing = 0.5.sp
+                    )
+                }
+            }
+        }
+    }
+}
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -194,6 +361,16 @@ fun MythosScreen(viewModel: MythosViewModel) {
                     )
                 )
         ) {
+            // Real-time Unified Glassmorphic Status Bar
+            val globalCoherenceVal = latestState?.coherence ?: 0.90
+            GlassmorphicStatusBar(
+                modifier = Modifier
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                coherenceValue = globalCoherenceVal,
+                isSyncing = isAnalyzing,
+                isSyncEnabled = autoSyncEnabled
+            )
+
             // Header Syntergic HUD
             Column(
                 modifier = Modifier
@@ -479,23 +656,18 @@ fun MythosScreen(viewModel: MythosViewModel) {
                                         label = "node_border_color"
                                     )
 
-                                    Box(
+                                    GlassmorphicNodeContainer(
                                         modifier = Modifier
                                             .weight(1f)
                                             .graphicsLayer(
                                                 scaleX = nodeScale,
                                                 scaleY = nodeScale
-                                            )
-                                            .clip(RoundedCornerShape(12.dp))
-                                            .background(animatedBgColor)
-                                            .border(
-                                                width = 1.5.dp,
-                                                color = animatedBorderColor,
-                                                shape = RoundedCornerShape(12.dp)
-                                            )
-                                            .clickable { viewModel.selectNode(node.nodeId) }
-                                            .padding(16.dp)
-                                            .testTag("node_${node.nodeId}")
+                                            ),
+                                        isSelected = isSelected,
+                                        backgroundColor = animatedBgColor,
+                                        borderColor = animatedBorderColor,
+                                        nodeId = node.nodeId,
+                                        onClick = { viewModel.selectNode(node.nodeId) }
                                     ) {
                                         Column {
                                             Row(
@@ -548,13 +720,64 @@ fun MythosScreen(viewModel: MythosViewModel) {
                                             Spacer(modifier = Modifier.height(4.dp))
                                             Text(
                                                 text = node.labelName,
-                                                fontSize = 10.sp,
-                                                color = Color.White.copy(alpha = 0.5f),
-                                                lineHeight = 12.sp
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Normal,
+                                                color = Color.White.copy(alpha = 0.65f),
+                                                lineHeight = 13.sp
                                             )
                                             Spacer(modifier = Modifier.height(10.dp))
                                             
-                                            // Coherence representation weight contrast (Bold for label, Light for value)
+                                            // STATUS hierarchy: Bold label / Light value
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(
+                                                    text = "LATTICE_ST",
+                                                    fontSize = 8.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = Color.White.copy(alpha = 0.4f),
+                                                    letterSpacing = 0.5.sp
+                                                )
+                                                Text(
+                                                    text = node.status.uppercase(),
+                                                    fontSize = 9.sp,
+                                                    fontWeight = FontWeight.Light,
+                                                    color = when (node.status) {
+                                                        "Active" -> CyberTeal
+                                                        "Syncing" -> CyberCyan
+                                                        else -> CoherenceLow
+                                                    },
+                                                    fontFamily = FontFamily.Monospace
+                                                )
+                                            }
+
+                                            // REF TIME hierarchy: Bold label / Light value
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(
+                                                    text = "REF_MS",
+                                                    fontSize = 8.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = Color.White.copy(alpha = 0.4f),
+                                                    letterSpacing = 0.5.sp
+                                                )
+                                                Text(
+                                                    text = "${node.lastSyncTime % 10000} ms",
+                                                    fontSize = 9.sp,
+                                                    fontWeight = FontWeight.Light,
+                                                    color = Color.White.copy(alpha = 0.75f),
+                                                    fontFamily = FontFamily.Monospace
+                                                )
+                                            }
+
+                                            Spacer(modifier = Modifier.height(2.dp))
+
+                                            // Λ COH hierarchy: Bold label / Light value
                                             Row(
                                                 modifier = Modifier.fillMaxWidth(),
                                                 horizontalArrangement = Arrangement.SpaceBetween,

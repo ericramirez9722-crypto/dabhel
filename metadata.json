@@ -1,5 +1,5 @@
 {
-  "name": "S.A.F. Mythos",
+  "name": "SAF MHYTOS",
   "description": "Distributed Cognitive Organism App with Neural Memory, Coherence Fields and Mythos Integration",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
