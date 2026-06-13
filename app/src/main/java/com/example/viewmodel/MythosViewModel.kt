@@ -378,6 +378,7 @@ class MythosViewModel(application: Application) : AndroidViewModel(application) 
                 _lastIdentityDrift.value = organism.lastIdentityDrift
                 _lastDriftTargetConcept.value = organism.lastDriftTargetConcept
                 updateEvolutionStats()
+                com.example.util.MythosSyncWorker.scheduleSync(getApplication())
             } catch (e: Exception) {
                 // simple log gracefully
                 e.printStackTrace()

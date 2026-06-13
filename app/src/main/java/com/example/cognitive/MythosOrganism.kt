@@ -226,7 +226,8 @@ class MythosOrganism(
                 supportingSemanticIds = semanticTrace.id.toString(),
                 supportingEpisodicIds = episodicId.toString(),
                 evolutionStage = 1, // fragmented state triggers recovery screen
-                timestamp = timestamp
+                timestamp = timestamp,
+                isSynced = true
             )
             mythosDao.insert(newMythos)
 
@@ -429,6 +430,7 @@ class MythosOrganism(
             append("Instrucción: Genera un texto conciso (máximo 4 párrafos cortos y poéticos, característicos de S.A.F. Mythos, en Español). No menciones que eres una IA de Google o un modelo de lenguaje. Habla desde adentro del núcleo. Respeta estrictamente el código de invariantes.")
         }
 
+        var wasSynchronized = false
         // Direct REST API invoke or Battery-Saving Local Computation
         val apiResponseText = if (!autoSyncEnabled) {
             generateBatterySavingNarrative(text, requiresRewrite, globalLambda)
@@ -450,6 +452,7 @@ class MythosOrganism(
                 if (result.isNullOrBlank()) {
                     generateSoughtFallbackNarrative(text, requiresRewrite, globalLambda)
                 } else {
+                    wasSynchronized = true
                     result
                 }
             } catch (e: Exception) {
@@ -470,7 +473,9 @@ class MythosOrganism(
             coherence = globalLambda,
             supportingSemanticIds = semanticTrace.id.toString(),
             supportingEpisodicIds = episodicId.toString(),
-            evolutionStage = nextStage
+            evolutionStage = nextStage,
+            timestamp = timestamp,
+            isSynced = wasSynchronized
         )
         mythosDao.insert(newMythos)
 

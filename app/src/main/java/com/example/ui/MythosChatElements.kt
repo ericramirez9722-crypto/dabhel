@@ -162,25 +162,50 @@ fun ModelBubble(
                             )
                         }
                         
-                        val stageText = when (record.evolutionStage) {
-                            3 -> "INTEGRADO"
-                            2 -> "ESTABLE"
-                            1 -> "REESCRITO"
-                            else -> "REGISTRO"
-                        }
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(CyberTeal.copy(alpha = 0.15f))
-                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                text = stageText,
-                                fontSize = 8.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = CyberTeal,
-                                letterSpacing = 0.5.sp
-                            )
+                            val stageText = when (record.evolutionStage) {
+                                3 -> "INTEGRADO"
+                                2 -> "ESTABLE"
+                                1 -> "REESCRITO"
+                                else -> "REGISTRO"
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(CyberTeal.copy(alpha = 0.15f))
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = stageText,
+                                    fontSize = 8.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = CyberTeal,
+                                    letterSpacing = 0.5.sp
+                                )
+                            }
+
+                            // Synchronization badge
+                            val syncColor = if (record.isSynced) CyberTeal else Color(0xFFF1C40F)
+                            val syncBg = if (record.isSynced) CyberTeal.copy(alpha = 0.12f) else Color(0xFFF1C40F).copy(alpha = 0.12f)
+                            val syncText = if (record.isSynced) "SINCRONIZADO" else "PENDIENTE"
+
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(syncBg)
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = syncText,
+                                    fontSize = 8.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = syncColor,
+                                    letterSpacing = 0.5.sp
+                                )
+                            }
                         }
                     }
                     

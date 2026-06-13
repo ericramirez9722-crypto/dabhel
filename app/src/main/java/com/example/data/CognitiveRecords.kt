@@ -41,7 +41,8 @@ data class MythosStateRecord(
     val supportingSemanticIds: String, // CSV of semantic link IDs
     val supportingEpisodicIds: String, // CSV of episodic link IDs
     val evolutionStage: Int, // 1: Fragmented, 2: Stable, 3: High Coherence / Integrated
-    val timestamp: Long = System.currentTimeMillis()
+    val timestamp: Long = System.currentTimeMillis(),
+    val isSynced: Boolean = true
 )
 
 @Entity(tableName = "cognitive_nodes")

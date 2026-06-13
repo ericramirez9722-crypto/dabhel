@@ -12,11 +12,16 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.ui.MythosScreen
 import com.example.ui.theme.MyApplicationTheme
 import com.example.viewmodel.MythosViewModel
+import com.example.util.MythosSyncWorker
 
 class MainActivity : ComponentActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     enableEdgeToEdge()
+    
+    // Schedule background queue sync for any pending offline content
+    MythosSyncWorker.scheduleSync(this)
+
     setContent {
       MyApplicationTheme {
         Surface(

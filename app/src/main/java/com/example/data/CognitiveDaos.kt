@@ -47,6 +47,12 @@ interface MythosDao {
     @Query("SELECT * FROM mythos_states ORDER BY timestamp DESC")
     fun observeAll(): Flow<List<MythosStateRecord>>
 
+    @Query("SELECT * FROM mythos_states WHERE isSynced = 0 ORDER BY timestamp ASC")
+    suspend fun getUnsyncedStates(): List<MythosStateRecord>
+
+    @Query("UPDATE mythos_states SET isSynced = 1 WHERE id = :id")
+    suspend fun markAsSynced(id: Long)
+
     @Query("DELETE FROM mythos_states")
     suspend fun clear()
 }
