@@ -1,6 +1,10 @@
 package com.example.viewmodel
 
 import android.app.Application
+import android.content.Context
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.cognitive.*
@@ -11,6 +15,10 @@ import kotlinx.coroutines.launch
 class MythosViewModel(application: Application) : AndroidViewModel(application) {
     private val db = CognitiveDatabase.getDatabase(application)
     val organism = MythosOrganism(db)
+
+    private val connectivityManager = application.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+    private val _isOnline = MutableStateFlow(false)
+    val isOnline: StateFlow<Boolean> = _isOnline.asStateFlow()
 
     // Exposed Flows from Room Database to dynamic stateflows
     val mythosStateList: StateFlow<List<MythosStateRecord>> = db.mythosDao().observeAll()
@@ -57,6 +65,25 @@ class MythosViewModel(application: Application) : AndroidViewModel(application) 
 
     private val _lastIdentityDrift = MutableStateFlow(0.0)
     val lastIdentityDrift: StateFlow<Double> = _lastIdentityDrift.asStateFlow()
+
+    val unsyncedCount: StateFlow<Int> = mythosStateList
+        .map { list -> list.count { !it.isSynced } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    val offlineDriftLevel: StateFlow<Double> = combine(
+        isOnline,
+        mythosStateList,
+        lastIdentityDrift
+    ) { online, sList, identityDrift ->
+        val unsynced = sList.count { !it.isSynced }
+        if (unsynced == 0 && online) {
+            0.0
+        } else {
+            val unsyncedContribution = (unsynced * 0.15).coerceAtMost(0.70)
+            val connectionDriftContribution = if (online) 0.0 else 0.20
+            (unsyncedContribution + connectionDriftContribution + identityDrift).coerceIn(0.0, 1.0)
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.0)
 
     private val _lastDriftTargetConcept = MutableStateFlow("None")
     val lastDriftTargetConcept: StateFlow<String> = _lastDriftTargetConcept.asStateFlow()
@@ -330,7 +357,33 @@ class MythosViewModel(application: Application) : AndroidViewModel(application) 
         prefs.edit().putBoolean("auto_sync_enabled", enabled).apply()
     }
 
+    fun triggerManualSync() {
+        viewModelScope.launch {
+            com.example.util.MythosSyncWorker.scheduleSync(getApplication())
+        }
+    }
+
     init {
+        // Initialize online status and monitor network changes
+        val activeNetwork = connectivityManager.activeNetwork
+        val capabilities = connectivityManager.getNetworkCapabilities(activeNetwork)
+        _isOnline.value = capabilities?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+
+        try {
+            connectivityManager.registerDefaultNetworkCallback(object : ConnectivityManager.NetworkCallback() {
+                override fun onAvailable(network: Network) {
+                    _isOnline.value = true
+                    com.example.util.MythosSyncWorker.scheduleSync(getApplication())
+                }
+
+                override fun onLost(network: Network) {
+                    _isOnline.value = false
+                }
+            })
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
         // Sync initial persisted value to the organism model
         val initialSync = _autoSyncEnabled.value
         organism.isSyncEnabled = initialSync

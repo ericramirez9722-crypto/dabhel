@@ -4831,6 +4831,10 @@ fun MetricsDashboardView(viewModel: MythosViewModel) {
     val latestState by viewModel.latestMythosState.collectAsStateWithLifecycle()
     val currentLambda = latestState?.coherence ?: 0.90
 
+    val isOnline by viewModel.isOnline.collectAsStateWithLifecycle()
+    val unsyncedCount by viewModel.unsyncedCount.collectAsStateWithLifecycle()
+    val offlineDriftLevel by viewModel.offlineDriftLevel.collectAsStateWithLifecycle()
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -4901,6 +4905,141 @@ fun MetricsDashboardView(viewModel: MythosViewModel) {
                             trackColor = CardBorder.copy(alpha = 0.5f)
                         )
                     }
+                }
+            }
+        }
+
+        Card(
+            colors = CardDefaults.cardColors(containerColor = CardBackground.copy(alpha = 0.6f)),
+            border = BorderStroke(1.dp, CardBorder)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(14.dp)
+                    .testTag("offline_drift_sync_card"),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "DESVIACIÓN TEMPORAL (OFFLINE DRIFT)",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (offlineDriftLevel > 0.4) CoherenceLow else CyberCyan,
+                        letterSpacing = 1.sp
+                    )
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier
+                            .background(
+                                color = if (isOnline) CyberTeal.copy(alpha = 0.15f) else CoherenceLow.copy(alpha = 0.15f),
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            .padding(horizontal = 8.dp, vertical = 2.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .clip(CircleShape)
+                                .background(if (isOnline) CyberTeal else CoherenceLow)
+                        )
+                        Text(
+                            text = if (isOnline) "CONECTADO" else "DESCONECTADO",
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isOnline) CyberTeal else CoherenceLow
+                        )
+                    }
+                }
+
+                Text(
+                    text = "Mide la divergencia estructural entre el estado local y la sincronización global de la nube. Un nivel más alto de drift indica pensamientos acumulados sin reconciliar offline.",
+                    fontSize = 11.sp,
+                    color = Color.White.copy(alpha = 0.5f),
+                    lineHeight = 14.sp
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Nivel de Drift: ${"%.1f%%".format(offlineDriftLevel * 100.0)}",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "Pensamientos pendientes: $unsyncedCount",
+                            fontSize = 11.sp,
+                            color = if (unsyncedCount > 0) CyberPurple else Color.White.copy(alpha = 0.5f)
+                        )
+                    }
+
+                    Button(
+                        onClick = { viewModel.triggerManualSync() },
+                        enabled = isOnline,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (unsyncedCount > 0) CyberTeal.copy(alpha = 0.2f) else CardBorder,
+                            contentColor = if (unsyncedCount > 0) CyberTeal else Color.White.copy(alpha = 0.6f),
+                            disabledContainerColor = CardBorder.copy(alpha = 0.3f),
+                            disabledContentColor = Color.White.copy(alpha = 0.3f)
+                        ),
+                        border = BorderStroke(
+                            1.dp,
+                            if (isOnline && unsyncedCount > 0) CyberTeal.copy(alpha = 0.5f) else CardBorder
+                        ),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                        modifier = Modifier
+                            .testTag("manual_sync_button")
+                            .minimumInteractiveComponentSize()
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Refresh,
+                            contentDescription = "Sincronizar",
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Sincronizar",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(8.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(CardBorder)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .fillMaxWidth(offlineDriftLevel.toFloat())
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(
+                                brush = Brush.horizontalGradient(
+                                    colors = if (offlineDriftLevel > 0.5) {
+                                        listOf(CyberCyan, CoherenceLow)
+                                    } else {
+                                        listOf(CyberPurple, CyberTeal)
+                                    }
+                                )
+                            )
+                    )
                 }
             }
         }
