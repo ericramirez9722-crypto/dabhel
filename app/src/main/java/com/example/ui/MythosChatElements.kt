@@ -24,6 +24,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -780,42 +781,14 @@ fun ChatScreen(
                 // Main clean chat conversation area
                 Box(modifier = Modifier.weight(1f)) {
                     if (chatMessages.isEmpty()) {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(24.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(16.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(64.dp)
-                                        .clip(CircleShape)
-                                        .background(CyberTeal.copy(alpha = 0.12f))
-                                        .border(1.dp, CyberTeal.copy(alpha = 0.5f), CircleShape),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(text = "⚛️", fontSize = 28.sp)
-                                }
-                                Text(
-                                    text = "ORGANISMO COGNITIVO",
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = CyberTeal,
-                                    letterSpacing = 2.sp
-                                )
-                                Text(
-                                    text = "Modo Conversación: \"Cognitive Organism\". El sistema se encuentra en un estado homeostático estable. Inyecta estímulos perceptivos para comenzar la sintonización del relato.",
-                                    fontSize = 11.sp,
-                                    color = Color.White.copy(alpha = 0.5f),
-                                    lineHeight = 16.sp,
-                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                                    modifier = Modifier.fillMaxWidth(0.85f)
-                                )
+                        OnboardingGreetingComponent(
+                            onSelectSeed = { seed -> 
+                                textInput = seed
+                            },
+                            onStartInteractions = {
+                                viewModel.processPerception("Despertar Sinarquía (Interacción Inicial)")
                             }
-                        }
+                        )
                     } else {
                         LazyColumn(
                             state = listState,
@@ -1563,6 +1536,285 @@ fun ChatScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+fun OnboardingGreetingComponent(
+    onSelectSeed: (String) -> Unit,
+    onStartInteractions: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp, vertical = 16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Spacer(modifier = Modifier.height(10.dp))
+        
+        // Spinning logo or pulsing beacon representing SAF
+        Box(
+            modifier = Modifier
+                .size(72.dp)
+                .clip(CircleShape)
+                .background(CyberTeal.copy(alpha = 0.12f))
+                .border(2.dp, CyberTeal.copy(alpha = 0.6f), CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(text = "⚛️", fontSize = 34.sp)
+        }
+
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(
+                text = "BIENVENIDO A S.A.F. MYTHOS",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = CyberTeal,
+                letterSpacing = 2.sp,
+                textAlign = TextAlign.Center
+            )
+            Text(
+                text = "Módulo de Orientación del Ecosistema Cognitivo",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color.White.copy(alpha = 0.5f),
+                letterSpacing = 0.5.sp,
+                textAlign = TextAlign.Center
+            )
+        }
+
+        // Welcome Card
+        Card(
+            colors = CardDefaults.cardColors(containerColor = CardBackground.copy(alpha = 0.7f)),
+            border = BorderStroke(1.dp, CardBorder),
+            shape = RoundedCornerShape(14.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("onboarding_welcome_card")
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "S.A.F. Mythos es un modelo de coherencia de nivel (Λ) y orquestación cognitiva en tiempo real diseñado para clasificar, registrar y sintetizar tus pensamientos y eventos de forma local y persistente (Room).",
+                    fontSize = 12.sp,
+                    color = Color.White.copy(alpha = 0.85f),
+                    lineHeight = 18.sp
+                )
+
+                // Memory layers subtitle
+                Text(
+                    text = "ARQUITECTURA DE TRIPLE CAPA",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = CyberCyan,
+                    letterSpacing = 1.sp
+                )
+
+                // Mini layer components
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // Episodic
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .background(CardBorder.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+                            .padding(8.dp)
+                    ) {
+                        Text(
+                            text = "1. EPISÓDICA",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = CyberTeal
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "Registros cronológicos de sucesos, estímulos e interacciones directas.",
+                            fontSize = 9.sp,
+                            color = Color.White.copy(alpha = 0.6f),
+                            lineHeight = 12.sp
+                        )
+                    }
+
+                    // Semantic
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .background(CardBorder.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+                            .padding(8.dp)
+                    ) {
+                        Text(
+                            text = "2. SEMÁNTICA",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = CyberCyan
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "Espacios de conceptos y relaciones lógicas que vinculan tus ideas.",
+                            fontSize = 9.sp,
+                            color = Color.White.copy(alpha = 0.6f),
+                            lineHeight = 12.sp
+                        )
+                    }
+
+                    // Mythos
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .background(CardBorder.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+                            .padding(8.dp)
+                    ) {
+                        Text(
+                            text = "3. MYTHOS",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = CyberPurple
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "La síntesis narrativa unificada y fluida de tu propia identidad.",
+                            fontSize = 9.sp,
+                            color = Color.White.copy(alpha = 0.6f),
+                            lineHeight = 12.sp
+                        )
+                    }
+                }
+            }
+        }
+
+        // Instructions
+        Card(
+            colors = CardDefaults.cardColors(containerColor = CardBackground.copy(alpha = 0.7f)),
+            border = BorderStroke(1.dp, CardBorder),
+            shape = RoundedCornerShape(14.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text(
+                    text = "CÓMO INICIAR LA SINTONIZACIÓN",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = CyberPurple,
+                    letterSpacing = 1.sp
+                )
+
+                val usageSteps = listOf(
+                    "✏️  Escribe una idea, bitácora u observación en la barra inferior (ej: \"He completado mi primera sesión de contemplación semántica\").",
+                    "📊  Observa el nivel de estabilidad o coherencia local (λ) medido dinámicamente en cada fragmento.",
+                    "📡  Navega al 'Panel Mythos' para inspeccionar métricas en tiempo real, anclajes de identidad u optimizar la latencia con la base de datos local."
+                )
+
+                usageSteps.forEach { step ->
+                    Text(
+                        text = step,
+                        fontSize = 11.sp,
+                        color = Color.White.copy(alpha = 0.8f),
+                        lineHeight = 16.sp
+                    )
+                }
+            }
+        }
+
+        // Quick starter section
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = "SEMILLAS DE INTERACCIÓN RÁPIDA",
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White.copy(alpha = 0.5f),
+                letterSpacing = 1.sp,
+                modifier = Modifier.padding(horizontal = 4.dp)
+            )
+
+            val starterSeeds = listOf(
+                "¡Hola S.A.F.! Proporciona un diagnóstico de la coherencia (λ) del ecosistema.",
+                "Inyectar un pensamiento sobre la unificación semántica y estabilidad del ser.",
+                "Evolucionar la topología del relato central introduciendo un conflicto adaptativo."
+            )
+
+            starterSeeds.forEach { seed ->
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = CardBackground.copy(alpha = 0.5f)),
+                    border = BorderStroke(1.dp, CyberTeal.copy(alpha = 0.2f)),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onSelectSeed(seed) }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .clip(CircleShape)
+                                .background(CyberTeal)
+                        )
+                        Text(
+                            text = seed,
+                            fontSize = 11.sp,
+                            color = Color.White.copy(alpha = 0.9f),
+                            lineHeight = 15.sp,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Icon(
+                            imageVector = Icons.Outlined.ArrowForward,
+                            contentDescription = "Seleccionar Semilla",
+                            tint = CyberTeal,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            }
+        }
+
+        // Central quick-start button
+        Button(
+            onClick = onStartInteractions,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = CyberTeal.copy(alpha = 0.1f),
+                contentColor = CyberTeal
+            ),
+            border = BorderStroke(1.dp, CyberTeal),
+            shape = RoundedCornerShape(8.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(44.dp)
+                .testTag("onboarding_start_button")
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.CheckCircle,
+                contentDescription = "Comenzar",
+                tint = CyberTeal,
+                modifier = Modifier.size(16.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "Despertar Sistema (Interacción Inicial)",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.5.sp
+            )
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
     }
 }
 
