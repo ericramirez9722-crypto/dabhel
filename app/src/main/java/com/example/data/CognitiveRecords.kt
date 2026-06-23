@@ -135,6 +135,25 @@ data class SyntergicLogEntity(
     val isCoherenceValid: Boolean
 )
 
+@Entity(tableName = "academic_analyses")
+data class AcademicAnalysisRecord(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val docTitle: String,
+    val docText: String,
+    val indexIA: Double, // Academic Integrity index (0.0 to 1.0)
+    val riskAcademic: Double, // Academic Risk Index (0.0 to 1.0)
+    val paraphrasingQuality: String,
+    val intellectualDependency: String,
+    val hallucinationReport: String,
+    val authorContribution: String,
+    val thesisCoherenceReport: String,
+    val aiSupervisorReport: String,
+    val fullDetailedReportMarkdown: String,
+    val academicStyle: String = "APA 7",
+    val timestamp: Long = System.currentTimeMillis()
+)
+
+
 
 
 

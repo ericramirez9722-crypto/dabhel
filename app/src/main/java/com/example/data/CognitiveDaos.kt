@@ -192,5 +192,24 @@ interface SyntergicLogDao {
     }
 }
 
+@Dao
+interface AcademicAnalysisDao {
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(analysis: AcademicAnalysisRecord): Long
+
+    @Query("SELECT * FROM academic_analyses ORDER BY timestamp DESC")
+    fun observeAll(): Flow<List<AcademicAnalysisRecord>>
+
+    @Query("SELECT * FROM academic_analyses ORDER BY timestamp DESC")
+    suspend fun getAllSync(): List<AcademicAnalysisRecord>
+
+    @Delete
+    suspend fun delete(analysis: AcademicAnalysisRecord)
+
+    @Query("DELETE FROM academic_analyses")
+    suspend fun clear()
+}
+
+
 
 

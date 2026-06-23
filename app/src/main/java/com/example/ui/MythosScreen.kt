@@ -742,6 +742,25 @@ fun OldMythosScreen(
                     ),
                     modifier = Modifier.testTag("dashboard_nav_item")
                 )
+                NavigationBarItem(
+                    selected = currentScreen == AppScreen.ACADEMIC_INTEGRITY,
+                    onClick = { onScreenChange(AppScreen.ACADEMIC_INTEGRITY) },
+                    label = { Text("Académico", fontWeight = FontWeight.Bold, fontSize = 11.sp) },
+                    icon = {
+                        Icon(
+                            imageVector = Icons.Outlined.CheckCircle,
+                            contentDescription = "Integridad Académica"
+                        )
+                    },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = CyberTeal,
+                        selectedTextColor = CyberTeal,
+                        indicatorColor = CyberTeal.copy(alpha = 0.12f),
+                        unselectedIconColor = Color.White.copy(alpha = 0.45f),
+                        unselectedTextColor = Color.White.copy(alpha = 0.45f)
+                    ),
+                    modifier = Modifier.testTag("academic_nav_item")
+                )
             }
         }
     ) { innerPadding ->
